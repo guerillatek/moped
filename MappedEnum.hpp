@@ -8,25 +8,25 @@
 
 namespace moped {
 
-template <auto enumVal, const char *mappedName> struct EnumValueEntry {
-  static constexpr auto value = enumVal;
+template <const char *mappedName, auto enumVal> struct EnumValueEntry {
   static constexpr auto stringValue = mappedName;
+  static constexpr auto value = enumVal;
 };
 
-template <auto enumVal, const char *mappedName, auto... Args>
+template <const char *mappedName, auto enumVal, auto... Args>
 constexpr auto enumEntryTuple() {
   if constexpr (sizeof...(Args) == 0) {
-    return std::tuple(EnumValueEntry<enumVal, mappedName>{});
+    return std::tuple(EnumValueEntry<mappedName, enumVal>{});
   } else {
-    return std::tuple_cat(std::tuple(EnumValueEntry<enumVal, mappedName>{}),
+    return std::tuple_cat(std::tuple(EnumValueEntry<mappedName, enumVal>{}),
                           enumEntryTuple<Args...>());
   }
 };
 
-template <auto enumVal, const char *mappedName, auto... Args> class MappedEnum {
+template <const char *mappedName, auto enumVal, auto... Args> class MappedEnum {
 
   static constexpr auto entries =
-      enumEntryTuple<enumVal, mappedName, Args...>();
+      enumEntryTuple<mappedName, enumVal, Args...>();
 
 public:
   using EnumT = decltype(enumVal);

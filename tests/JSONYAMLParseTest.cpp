@@ -2,12 +2,12 @@
 #include "moped/mopedJSON.hpp"
 #include "moped/mopedYAML.hpp"
 
+#include <catch2/catch.hpp>
+
 #include "moped/tests/mdConfigSampleDefns.hpp"
 #include <optional>
 #include <string>
 #include <vector>
-
-#include <boost/test/unit_test.hpp>
 
 std::string_view jsonTestMDConfig = R"(
 {
@@ -143,83 +143,82 @@ MarketDataService:
         uri: "/api/v3/exchangeInfo"   
 )";
 
+#define ASSERT_EQ(A, B) REQUIRE(A == B)
+
 void TestCompositeValues(auto &result) {
 
-  BOOST_CHECK(result.has_value());
+  REQUIRE(result.has_value());
   auto &mdConfig = result.value();
   auto &mdService = mdConfig.marketDataService;
-  BOOST_CHECK(mdService.sessions.size() == 1);
-  BOOST_CHECK(mdService.sessions.contains("binanceSessionMDAws"));
+  REQUIRE(mdService.sessions.size() == 1);
+  REQUIRE(mdService.sessions.contains("binanceSessionMDAws"));
   auto &session = mdService.sessions.at("binanceSessionMDAws");
-  BOOST_CHECK(session.enabled);
-  BOOST_CHECK_EQUAL(session.venue, "BINANCE");
-  BOOST_CHECK_EQUAL(session.runContext, "binanceSpot");
-  BOOST_CHECK_EQUAL(session.serviceContext, "aeronPubSub");
-  BOOST_CHECK_EQUAL(session.maxRequestPerSecond, 4);
-  BOOST_CHECK_EQUAL(session.maxSymbolsPerConnection, 50);
-  BOOST_CHECK_EQUAL(session.subscriptions.size(), 3);
-  BOOST_CHECK(session.subscriptions.contains("BTCUSDT"));
-  BOOST_CHECK(session.subscriptions.contains("ETHUSDT"));
-  BOOST_CHECK(session.subscriptions.contains("LTCUSDT"));
+  REQUIRE(session.enabled);
+  ASSERT_EQ(session.venue, "BINANCE");
+  ASSERT_EQ(session.runContext, "binanceSpot");
+  ASSERT_EQ(session.serviceContext, "aeronPubSub");
+  ASSERT_EQ(session.maxRequestPerSecond, 4);
+  ASSERT_EQ(session.maxSymbolsPerConnection, 50);
+  ASSERT_EQ(session.subscriptions.size(), 3);
+  REQUIRE(session.subscriptions.contains("BTCUSDT"));
+  REQUIRE(session.subscriptions.contains("ETHUSDT"));
+  REQUIRE(session.subscriptions.contains("LTCUSDT"));
   auto &btcSubscription = session.subscriptions.at("BTCUSDT");
-  BOOST_CHECK_EQUAL(btcSubscription.id, 1);
-  BOOST_CHECK(btcSubscription.subscribeFlags.has_value(
+  ASSERT_EQ(btcSubscription.id, 1);
+  REQUIRE(btcSubscription.subscribeFlags.has_value(
       moped::tests::SubscriptionFlags::TopOfBook));
-  BOOST_CHECK(btcSubscription.subscribeFlags.has_value(
+  REQUIRE(btcSubscription.subscribeFlags.has_value(
       moped::tests::SubscriptionFlags::Trade));
-  BOOST_CHECK(btcSubscription.subscribeFlags.has_value(
+  REQUIRE(btcSubscription.subscribeFlags.has_value(
       moped::tests::SubscriptionFlags::DepthOfBook));
-  BOOST_CHECK(!btcSubscription.subscribeFlags.has_value(
+  REQUIRE(!btcSubscription.subscribeFlags.has_value(
       moped::tests::SubscriptionFlags::FundingRate));
-  BOOST_CHECK_EQUAL(btcSubscription.bookUpdateSettings.levels, 20);
-  BOOST_CHECK(btcSubscription.bookUpdateSettings.arbTrades);
-  BOOST_CHECK(btcSubscription.bookUpdateSettings.removeRestingOrders);
+  ASSERT_EQ(btcSubscription.bookUpdateSettings.levels, 20);
+  REQUIRE(btcSubscription.bookUpdateSettings.arbTrades);
+  REQUIRE(btcSubscription.bookUpdateSettings.removeRestingOrders);
   auto &ethSubscription = session.subscriptions.at("ETHUSDT");
-  BOOST_CHECK_EQUAL(ethSubscription.id, 2);
-  BOOST_CHECK(ethSubscription.subscribeFlags.has_value(
+  ASSERT_EQ(ethSubscription.id, 2);
+  REQUIRE(ethSubscription.subscribeFlags.has_value(
       moped::tests::SubscriptionFlags::TopOfBook));
-  BOOST_CHECK(ethSubscription.subscribeFlags.has_value(
+  REQUIRE(ethSubscription.subscribeFlags.has_value(
       moped::tests::SubscriptionFlags::Trade));
-  BOOST_CHECK(ethSubscription.subscribeFlags.has_value(
+  REQUIRE(ethSubscription.subscribeFlags.has_value(
       moped::tests::SubscriptionFlags::DepthOfBook));
-  BOOST_CHECK(!ethSubscription.subscribeFlags.has_value(
+  REQUIRE(!ethSubscription.subscribeFlags.has_value(
       moped::tests::SubscriptionFlags::FundingRate));
-  BOOST_CHECK_EQUAL(ethSubscription.bookUpdateSettings.levels, 20);
-  BOOST_CHECK(ethSubscription.bookUpdateSettings.arbTrades);
-  BOOST_CHECK(ethSubscription.bookUpdateSettings.removeRestingOrders);
+  ASSERT_EQ(ethSubscription.bookUpdateSettings.levels, 20);
+  REQUIRE(ethSubscription.bookUpdateSettings.arbTrades);
+  REQUIRE(ethSubscription.bookUpdateSettings.removeRestingOrders);
   auto &ltcSubscription = session.subscriptions.at("LTCUSDT");
-  BOOST_CHECK_EQUAL(ltcSubscription.id, 3);
+  ASSERT_EQ(ltcSubscription.id, 3);
   auto &subscriptionEndpoint = session.subscriptionEndpoint;
-  BOOST_CHECK_EQUAL(subscriptionEndpoint.name, "binanceSpotMD");
-  BOOST_CHECK_EQUAL(subscriptionEndpoint.host, "stream.binance.com");
-  BOOST_CHECK_EQUAL(subscriptionEndpoint.port, 9443);
-  BOOST_CHECK_EQUAL(subscriptionEndpoint.uri, "/ws");
+  ASSERT_EQ(subscriptionEndpoint.name, "binanceSpotMD");
+  ASSERT_EQ(subscriptionEndpoint.host, "stream.binance.com");
+  ASSERT_EQ(subscriptionEndpoint.port, 9443);
+  ASSERT_EQ(subscriptionEndpoint.uri, "/ws");
   auto &snapshotEndpoint = session.snapshotEndpoint;
-  BOOST_CHECK_EQUAL(snapshotEndpoint.name, "binanceSpotSnapShot");
-  BOOST_CHECK_EQUAL(snapshotEndpoint.host, "api.binance.com");
-  BOOST_CHECK_EQUAL(snapshotEndpoint.port, 443);
-  BOOST_CHECK_EQUAL(snapshotEndpoint.uri, "/api/v3/depth");
+  ASSERT_EQ(snapshotEndpoint.name, "binanceSpotSnapShot");
+  ASSERT_EQ(snapshotEndpoint.host, "api.binance.com");
+  ASSERT_EQ(snapshotEndpoint.port, 443);
+  ASSERT_EQ(snapshotEndpoint.uri, "/api/v3/depth");
   auto &instrumentDataEndpoint = session.instrumentDataEndpoint;
-  BOOST_CHECK_EQUAL(instrumentDataEndpoint.name, "binanceInstruments");
-  BOOST_CHECK_EQUAL(instrumentDataEndpoint.host, "api.binance.com");
-  BOOST_CHECK_EQUAL(instrumentDataEndpoint.port, 443);
-  BOOST_CHECK_EQUAL(instrumentDataEndpoint.uri, "/api/v3/exchangeInfo");
+  ASSERT_EQ(instrumentDataEndpoint.name, "binanceInstruments");
+  ASSERT_EQ(instrumentDataEndpoint.host, "api.binance.com");
+  ASSERT_EQ(instrumentDataEndpoint.port, 443);
+  ASSERT_EQ(instrumentDataEndpoint.uri, "/api/v3/exchangeInfo");
 }
 
-struct TestFixture {};
-
-BOOST_FIXTURE_TEST_SUITE(MopedYAMLUnitTests, TestFixture)
-
-BOOST_AUTO_TEST_CASE(YAML_PARSE_TEST) {
+TEST_CASE("Loading a Market data service config definition with moped mapping "
+          "using YAML  "
+          "[YAML DATA SERVICE CONFIG]") {
   auto result = moped::parseCompositeFromYAMLView<moped::tests::MDConfig>(
       yamlTestMDConfig);
   TestCompositeValues(result);
 }
 
-BOOST_AUTO_TEST_CASE(JSON_PARSE_TEST) {
+TEST_CASE("Same definition, Same mapping but now loading with JSON"
+          "[JSON MARKET DATA SERVICE]") {
   auto result = moped::parseCompositeFromJSONView<moped::tests::MDConfig>(
       jsonTestMDConfig);
   TestCompositeValues(result);
 }
-
-BOOST_AUTO_TEST_SUITE_END();

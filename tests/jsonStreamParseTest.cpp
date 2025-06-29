@@ -1,9 +1,9 @@
+
+#include <catch2/catch.hpp>
+
 #include "moped/MappedObjectParseEncoderDispatcher.hpp"
 #include "moped/ScaledInteger.hpp"
 #include "moped/mopedJSON.hpp"
-
-#include <boost/test/unit_test.hpp>
-#include <boost/test/unit_test_suite.hpp>
 
 #include <optional>
 
@@ -149,72 +149,64 @@ struct ExchangeInfo {
   }
 };
 
-struct MopedTypeDefinitions {
-  std::string name;
-  std::string description;
-};
+#define ASSERT_EQ(A, B) REQUIRE(A == B)
 
-BOOST_FIXTURE_TEST_SUITE(MopedUnitTests, MopedTypeDefinitions);
-
-BOOST_AUTO_TEST_CASE(INSTRUMENT_DATA_LOAD_TEST) {
+TEST_CASE("Instrument Data load Test with streaming parer and no "
+          "std::string_view member support",
+          "[JSON STREAMING PARSER]") {
   static_assert(moped::IsSettable<std::optional<S9Int>>,
                 "std::optional<S9Int> must be settable in MOPED");
   auto result =
       moped::parseCompositeFromJSONStream<ExchangeInfo>(instrumentData);
-  if (!result.has_value()) {
-    BOOST_FAIL("Failed to parse instrument data: " + result.error());
-  }
-
+  REQUIRE(result);
   const ExchangeInfo &info = result.value();
 
   // Top-level checks
-  BOOST_CHECK_EQUAL(info.timezone, "UTC");
-  BOOST_CHECK_EQUAL(info.serverTime, moped::TimePoint{std::chrono::nanoseconds{
-                                         1748461268460000000LL}});
-  BOOST_CHECK_EQUAL(info.rateLimits.size(), 4);
-  BOOST_CHECK_EQUAL(info.exchangeFilters.size(), 0);
-  BOOST_CHECK_EQUAL(info.symbols.size(), 3);
+  ASSERT_EQ(info.timezone, "UTC");
+  ASSERT_EQ(info.serverTime,
+            moped::TimePoint{std::chrono::nanoseconds{1748461268460000000LL}});
+  ASSERT_EQ(info.rateLimits.size(), 4);
+  ASSERT_EQ(info.exchangeFilters.size(), 0);
+  ASSERT_EQ(info.symbols.size(), 3);
 
   // Check first rate limit
-  BOOST_CHECK_EQUAL(info.rateLimits[0].rateLimitType, "REQUEST_WEIGHT");
-  BOOST_CHECK_EQUAL(info.rateLimits[0].interval, "MINUTE");
-  BOOST_CHECK_EQUAL(info.rateLimits[0].intervalNum, 1);
-  BOOST_CHECK_EQUAL(info.rateLimits[0].limit, 1200);
+  ASSERT_EQ(info.rateLimits[0].rateLimitType, "REQUEST_WEIGHT");
+  ASSERT_EQ(info.rateLimits[0].interval, "MINUTE");
+  ASSERT_EQ(info.rateLimits[0].intervalNum, 1);
+  ASSERT_EQ(info.rateLimits[0].limit, 1200);
 
   // Check first symbol
   const Symbol &sym = info.symbols[0];
-  BOOST_CHECK_EQUAL(sym.symbol, "BTCUSD4");
-  BOOST_CHECK_EQUAL(sym.status, "BREAK");
-  BOOST_CHECK_EQUAL(sym.baseAsset, "BTC");
-  BOOST_CHECK_EQUAL(sym.baseAssetPrecision, 8);
-  BOOST_CHECK_EQUAL(sym.quoteAsset, "USD4");
-  BOOST_CHECK_EQUAL(sym.quotePrecision, 4);
-  BOOST_CHECK_EQUAL(sym.quoteAssetPrecision, 4);
-  BOOST_CHECK_EQUAL(sym.baseCommissionPrecision, 8);
-  BOOST_CHECK_EQUAL(sym.quoteCommissionPrecision, 2);
-  BOOST_CHECK_EQUAL(sym.orderTypes.size(), 5);
-  BOOST_CHECK(sym.icebergAllowed);
-  BOOST_CHECK(sym.ocoAllowed);
-  BOOST_CHECK(sym.quoteOrderQtyMarketAllowed);
-  BOOST_CHECK(sym.allowTrailingStop);
-  BOOST_CHECK(sym.cancelReplaceAllowed);
-  BOOST_CHECK(sym.isSpotTradingAllowed);
-  BOOST_CHECK(!sym.isMarginTradingAllowed);
-  BOOST_CHECK_EQUAL(sym.filters.size(), 9);
-  BOOST_CHECK_EQUAL(sym.permissions.size(), 1);
-  BOOST_CHECK_EQUAL(sym.permissions[0], "SPOT");
-  BOOST_CHECK_EQUAL(sym.defaultSelfTradePreventionMode, "EXPIRE_MAKER");
-  BOOST_CHECK_EQUAL(sym.allowedSelfTradePreventionModes.size(), 3);
+  ASSERT_EQ(sym.symbol, "BTCUSD4");
+  ASSERT_EQ(sym.status, "BREAK");
+  ASSERT_EQ(sym.baseAsset, "BTC");
+  ASSERT_EQ(sym.baseAssetPrecision, 8);
+  ASSERT_EQ(sym.quoteAsset, "USD4");
+  ASSERT_EQ(sym.quotePrecision, 4);
+  ASSERT_EQ(sym.quoteAssetPrecision, 4);
+  ASSERT_EQ(sym.baseCommissionPrecision, 8);
+  ASSERT_EQ(sym.quoteCommissionPrecision, 2);
+  ASSERT_EQ(sym.orderTypes.size(), 5);
+  REQUIRE(sym.icebergAllowed);
+  REQUIRE(sym.ocoAllowed);
+  REQUIRE(sym.quoteOrderQtyMarketAllowed);
+  REQUIRE(sym.allowTrailingStop);
+  REQUIRE(sym.cancelReplaceAllowed);
+  REQUIRE(sym.isSpotTradingAllowed);
+  REQUIRE(!sym.isMarginTradingAllowed);
+  ASSERT_EQ(sym.filters.size(), 9);
+  ASSERT_EQ(sym.permissions.size(), 1);
+  ASSERT_EQ(sym.permissions[0], "SPOT");
+  ASSERT_EQ(sym.defaultSelfTradePreventionMode, "EXPIRE_MAKER");
+  ASSERT_EQ(sym.allowedSelfTradePreventionModes.size(), 3);
 
   // Check a filter in the first symbol
   const Filter &filter = sym.filters[0];
-  BOOST_CHECK_EQUAL(filter.filterType, "PRICE_FILTER");
-  BOOST_CHECK(filter.minPrice.has_value());
-  BOOST_CHECK_EQUAL(filter.minPrice.value(), S9Int{"0.0100"});
-  BOOST_CHECK(filter.maxPrice.has_value());
-  BOOST_CHECK_EQUAL(filter.maxPrice.value(), S9Int{"100000.0000"});
-  BOOST_CHECK(filter.tickSize.has_value());
-  BOOST_CHECK_EQUAL(filter.tickSize.value(), S9Int{"0.0100"});
+  ASSERT_EQ(filter.filterType, "PRICE_FILTER");
+  REQUIRE(filter.minPrice.has_value());
+  ASSERT_EQ(filter.minPrice.value(), S9Int{"0.0100"});
+  REQUIRE(filter.maxPrice.has_value());
+  ASSERT_EQ(filter.maxPrice.value(), S9Int{"100000.0000"});
+  REQUIRE(filter.tickSize.has_value());
+  ASSERT_EQ(filter.tickSize.value(), S9Int{"0.0100"});
 }
-
-BOOST_AUTO_TEST_SUITE_END();

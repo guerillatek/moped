@@ -9,13 +9,13 @@ template <typename CompositeT, MemberIdTraitsC MemberIdTraits>
   requires IsMOPEDCompositeC<CompositeT, MemberIdTraits>
 struct CompositeParserEventDispatcher {
   using CompositeMOPEDHandler = std::decay_t<
-      decltype(CompositeT::template getMOPEDHandler<MemberIdTraits>())>;
+      decltype(getMOPEDHandlerForParser<CompositeT, MemberIdTraits>())>;
   using MOPEDHandlerStack = std::stack<IMOPEDHandler<MemberIdTraits> *>;
 
   template <typename... Args>
   CompositeParserEventDispatcher(Args &&...args)
-      : _compositeMOPEDHandler{CompositeT::template getMOPEDHandler<
-            MemberIdTraits>()},
+      : _compositeMOPEDHandler{getMOPEDHandlerForParser<CompositeT,
+                                                        MemberIdTraits>()},
         _composite{std::forward<Args>(args)...} {
     _compositeMOPEDHandler.setTargetMember(_composite);
   }

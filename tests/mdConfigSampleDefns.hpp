@@ -52,10 +52,10 @@ enum class SubscriptionFlags : std::uint8_t {
 };
 
 using SubscriptionFlagsMappedEnum =
-    moped::MappedEnum<SubscriptionFlags::TopOfBook, TopOfBook,
-                      SubscriptionFlags::Trade, Trade,
-                      SubscriptionFlags::DepthOfBook, DepthOfBook,
-                      SubscriptionFlags::FundingRate, FundingRate>;
+    moped::MappedEnum<TopOfBook, SubscriptionFlags::TopOfBook, Trade,
+                      SubscriptionFlags::Trade, DepthOfBook,
+                      SubscriptionFlags::DepthOfBook, FundingRate,
+                      SubscriptionFlags::FundingRate>;
 
 using SubscriptionFlagsT = moped::MappedEnumFlags<SubscriptionFlagsMappedEnum>;
 

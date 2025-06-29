@@ -103,9 +103,28 @@ concept IsMOPEDValueC =
     std::is_floating_point_v<T> || is_scaled_int<T> || is_mapped_enum<T>;
 
 template <typename T, typename MemberIdTraits>
-concept IsMOPEDCompositeC =
+concept HasEmbeddedHandler =
     IMOPEDHandlerC<decltype(T::template getMOPEDHandler<MemberIdTraits>()),
                    MemberIdTraits>;
+
+template <typename T, typename MemberIdTraits> void getMOPEDHandler() {}
+
+template <typename T, moped::MemberIdTraitsC MemberIdTraits>
+static auto getMOPEDHandlerForParser() {
+  if constexpr (HasEmbeddedHandler<T, MemberIdTraits>) {
+    return T::template getMOPEDHandler<MemberIdTraits>();
+  } else {
+    return getMOPEDHandler<T, MemberIdTraits>();
+  }
+}
+
+template <typename T>
+concept NotVoidResult = !std::is_void_v<T>;
+
+template <typename T, typename MemberIdTraits>
+concept IsMOPEDCompositeC = requires() {
+  { getMOPEDHandlerForParser<T, MemberIdTraits>() } -> NotVoidResult;
+};
 
 template <typename T, typename MemberIdTraits>
 concept IsMOPEDContentC =

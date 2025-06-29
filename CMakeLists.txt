@@ -5,8 +5,10 @@ project(moped)
 set(CMAKE_CXX_STANDARD 23)
 
 # set(CMAKE_VERBOSE_MAKEFILE ON)
-set(Boost_USE_STATIC_LIBS ON)
 set(BUILD_SHARED_LIBS OFF)
+
+#add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fsanitize=address>) 
+#set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
 
 if (UNIX AND NOT APPLE)
     set(VCPKG_TARGET_TRIPLET "x64-linux")
@@ -33,5 +35,5 @@ ParserBase.cpp)
 target_compile_options(moped PRIVATE -fPIC)
 target_link_options(moped PRIVATE "-Wl,--no-as-needed")
 
-
+enable_testing() 
 add_subdirectory(tests)

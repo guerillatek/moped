@@ -1,4 +1,3 @@
-#define BOOST_TEST_MAIN
-#define BOOST_TEST_DYN_LINK
+#define CATCH_CONFIG_MAIN
 
-#include <boost/test/included/unit_test.hpp>
+#include <catch2/catch.hpp>

@@ -99,7 +99,7 @@ struct ValueHandlerBase<T, MemberIdTraits> {
       std::decay_t<decltype(T::template getMOPEDHandler<MemberIdTraits>())>;
 
   ValueTypeHandlerT _valueTypeHandler{
-      T::template getMOPEDHandler<MemberIdTraits>()};
+      getMOPEDHandlerForParser<T, MemberIdTraits>()};
 };
 
 template <IsMOPEDPushCollectionC MemberT, MemberIdTraitsC MemberIdTraits>
@@ -125,7 +125,7 @@ struct Handler<MemberT, MemberIdTraits>
       _targetCollection->emplace_back();
       this->_valueTypeHandler.setTargetMember(_targetCollection->back());
       this->_valueTypeHandler.onObjectStart(eventHandlerStack);
-    } 
+    }
   }
 
   void onObjectFinish(MOPEDHandlerStack &handlerStack) override {
@@ -341,9 +341,9 @@ template <typename MemberT, MemberIdTraitsC MemberIdTraits>
   requires(IsMOPEDCompositeC<MemberT, MemberIdTraits>)
 struct Handler<MemberT, MemberIdTraits>
     : std::decay_t<
-          decltype(MemberT::template getMOPEDHandler<MemberIdTraits>())> {
+          decltype(getMOPEDHandlerForParser<MemberT, MemberIdTraits>())> {
   using HandlerBase = std::decay_t<
-      decltype(MemberT::template getMOPEDHandler<MemberIdTraits>())>;
+      decltype(getMOPEDHandlerForParser<MemberT, MemberIdTraits>())>;
   using MemberType = MemberT;
   using MemberIdT = typename MemberIdTraits::MemberIdType;
 
