@@ -34,6 +34,7 @@ protected:
 
 protected:
   std::string _reusableBuffer;
+  std::string _activeMemberName;
 
 private:
   static std::regex integerPattern;
