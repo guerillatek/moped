@@ -84,6 +84,10 @@ class JSONStreamParser : public ParserBase {
   ParseEventDispatchT _eventDispatch;
 
 public:
+  template <typename... Args>
+  JSONStreamParser(Args &&...args)
+      : _eventDispatch{std::forward<Args>(args)...} {}
+
   Expected parseInputStream(std::istream &ss) {
     using ValidatorStack = std::stack<char>;
     ValidatorStack vs;

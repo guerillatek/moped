@@ -11,8 +11,7 @@ std::expected<CompositeT, std::string>
 parseCompositeFromJSONStream(std::istream &jsonStream, Args &&...args) {
   using DispatcherT =
       CompositeParserEventDispatcher<CompositeT, StringMemberIdTraits>;
-  DispatcherT dispatcher{std::forward<Args>(args)...};
-  JSONStreamParser<DispatcherT> parser{};
+  JSONStreamParser<DispatcherT> parser{std::forward<Args>(args)...};
   if (auto result = parser.parseInputStream(jsonStream); !result) {
     return std::unexpected(result.error());
   }
@@ -35,7 +34,7 @@ parseCompositeFromJSONView(std::string_view jsonView, Args &&...args) {
   using DispatcherT =
       CompositeParserEventDispatcher<CompositeT, StringMemberIdTraits>;
   DispatcherT dispatcher{std::forward<Args>(args)...};
-  JSONViewParser<DispatcherT> parser{};
+  JSONViewParser<DispatcherT> parser{std::forward<Args>(args)...};
   if (auto result = parser.parse(jsonView); !result) {
     return std::unexpected(result.error());
   }

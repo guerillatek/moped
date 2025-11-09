@@ -61,7 +61,7 @@ class JSONViewParser : public ParserBase {
   // Parse a numeric value, return the view and advance iterator
   ExpectedText getNumericValueText(Iterator &it, Iterator end) {
     Iterator start = it;
-    while (it != end && (isNumericChar(*it))){
+    while (it != end && (isNumericChar(*it))) {
       ++it;
     }
     if (start == it)
@@ -72,6 +72,9 @@ class JSONViewParser : public ParserBase {
   }
 
 public:
+  template <typename... Args>
+  JSONViewParser(Args &&...args)
+      : _eventDispatch{std::forward<Args>(args)...} {}
 
   Expected parse(std::string_view json) {
     using ValidatorStack = std::stack<char>;

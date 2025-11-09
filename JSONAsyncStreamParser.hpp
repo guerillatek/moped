@@ -19,7 +19,7 @@ using ExpectedText = std::expected<std::string, std::string>;
 using ParseResult = CoParseResult<Expected>;
 
 template <IParserEventDispatchC ParseEventDispatchT>
-class JSONStreamParser : public ParserBase {
+class JSONSAsyncStreamParser : public ParserBase {
 
   template <typename Actions...>
   inline std::awaitable<Expected>

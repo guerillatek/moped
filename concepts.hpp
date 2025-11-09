@@ -74,7 +74,12 @@ template <MemberIdTraitsC MemberIdTraits> struct IMOPEDHandler {
   virtual void onBooleanValue(bool value) {
     throw std::runtime_error("Unhandled boolean value event");
   }
+
+  virtual void onRawBinary(void *value) {
+    throw std::runtime_error("Unhandled binary value event");
+  }
 };
+
 
 template <typename T, typename MemberIdTraits>
 concept IMOPEDHandlerC = std::derived_from<T, IMOPEDHandler<MemberIdTraits>>;
@@ -137,6 +142,13 @@ concept IsMOPEDPushCollectionC = requires(T t) {
 };
 
 template <typename T>
+concept IsMOPEDCompositeDispatcherC = requires(T t) {
+  { t.setCurrentValue(std::declval<const typename T::value_type &>()) };
+  { t.dispatcherLastCapture() };
+  { t.resetCapture() } -> std::same_as<typename T::value_type &>;
+};
+
+template <typename T>
 concept IsMOPEDMapCollectionC = requires(T t) {
   {
     t.operator[](std::declval<typename T::key_type>())
@@ -157,8 +169,9 @@ concept is_optional = requires(T t) {
 };
 
 template <typename T, typename MemberIdTraits>
-concept IsMOPEDTypeC = IsMOPEDContentC<T, MemberIdTraits> ||
-                       IsMOPEDContentCollectionC<T> || is_optional<T>;
+concept IsMOPEDTypeC =
+    IsMOPEDContentC<T, MemberIdTraits> || IsMOPEDContentCollectionC<T> ||
+    is_optional<T> || IsMOPEDCompositeDispatcherC<T>;
 
 template <typename T>
 concept IsSettable = IsMOPEDValueC<T> ||

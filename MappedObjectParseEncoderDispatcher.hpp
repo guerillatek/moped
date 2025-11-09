@@ -152,6 +152,21 @@ struct Handler<MemberT, MemberIdTraits>
     _targetCollection = &targetMember;
   }
 
+  void applyEmitterContext(auto &emitterContext, memberId) {
+    emitterContext.onArrayStart(memberId, _targetCollection->size());
+
+    for (auto &item : *_targetCollection) {
+      if constexpr (HasCompositeValueType) {
+        this->_valueTypeHandler.setTargetMember(item);
+        this->_valueTypeHandler.applyEmitterContext(emitterContext,
+                                                    std::nullopt);
+      } else {
+        emitterContext.onArrayValueEntry(item);
+      }
+    }
+    emitterContext.onArrayFinish();
+  }
+
 private:
   void HandleScalarValue(std::string_view value) {
     if constexpr (HasCompositeValueType) {
@@ -163,6 +178,74 @@ private:
   }
 
   MemberT *_targetCollection;
+};
+
+template <IsMOPEDCompositeDispatcherC MemberT, MemberIdTraitsC MemberIdTraits>
+struct Handler<MemberT, MemberIdTraits>
+    : IMOPEDHandler<MemberIdTraits>,
+      ValueHandlerBase<typename MemberT::value_type, MemberIdTraits> {
+  using MemberIdType = typename MemberIdTraits::MemberIdType;
+
+  using MemberType = MemberT;
+  using ValueType = typename MemberT::value_type;
+  static constexpr bool HasCompositeValueType =
+      IsMOPEDCompositeC<typename MemberT::value_type, MemberIdTraits>;
+  using MOPEDHandlerStack = std::stack<IMOPEDHandler<MemberIdTraits> *>;
+
+  void onMember(MOPEDHandlerStack &eventHandlerStack,
+                MemberIdType memberId) override {
+    throw std::runtime_error("Parse error!!! onObjectFinish event not expected"
+                             " in dispatching handler");
+  }
+
+  void onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
+    _dispatcher->dispatcherLastCapture();
+    this->_valueTypeHandler.setTargetMember(_dispatcher->resetCapture());
+    this->_valueTypeHandler.onObjectStart(eventHandlerStack);
+  }
+
+  void onObjectFinish(MOPEDHandlerStack &handlerStack) override {
+    throw std::runtime_error("Parse error!!! onObjectFinish event not expected"
+                             " in dispatching handler");
+  }
+
+  void onArrayStart(MOPEDHandlerStack &handlerStack) override {
+    handlerStack.push(this);
+  }
+  void onArrayFinish(MOPEDHandlerStack &handlerStack) override {
+    _dispatcher->dispatcherLastCapture();
+    handlerStack.pop();
+  }
+
+  void onStringValue(std::string_view value) override {
+    HandleScalarValue(value);
+  }
+
+  void onNumericValue(std::string_view value) override {
+    HandleScalarValue(value);
+  }
+
+  void setTargetMember(MemberT &targetMember) { _dispatcher = &targetMember; }
+
+  void applyEmitterContext(auto &emitterContext,
+                           std::optional<MemberIdType> memberId) {
+    throw std::runtime_error("Emission not supported for types with function "
+                             "dispatchers for members");
+  }
+
+private:
+  void HandleScalarValue(std::string_view value) {
+    if constexpr (HasCompositeValueType) {
+      throw std::runtime_error(
+          "Parse error!!! No active composite handler to set value");
+    } else {
+
+      _dispatcher->setCurrentValue(getValueFor<ValueType>(value));
+      _dispatcher->dispatcherLastCapture();
+    }
+  }
+
+  MemberT *_dispatcher;
 };
 
 template <is_array MemberT, MemberIdTraitsC MemberIdTraits>
@@ -232,6 +315,22 @@ struct Handler<MemberT, MemberIdTraits>
   }
 
   void setTargetMember(MemberT &targetMember) { _targetArray = &targetMember; }
+
+  void applyEmitterContext(auto &emitterContext,
+                           std::optional<MemberIdT> memberId) {
+    emitterContext.onArrayStart(memberId, _targetArray->size());
+
+    for (auto &item : *_targetArray) {
+      if constexpr (HasCompositeValueType) {
+        this->_valueTypeHandler.setTargetMember(item);
+        this->_valueTypeHandler.applyEmitterContext(emitterContext,
+                                                    std::nullopt);
+      } else {
+        emitterContext.onArrayValueEntry(item);
+      }
+    }
+    emitterContext.onArrayFinish();
+  }
 
 private:
   void HandleScalarValue(std::string_view value) {
@@ -306,6 +405,21 @@ struct Handler<MemberT, MemberIdTraits>
 
   void setTargetMember(MemberT &targetMember) {
     _targetCollection = &targetMember;
+  }
+
+  applyEmitterContext(auto &emitterContext,
+                      std::optional<MemberIdType> memberId) {
+    emitterContext.onObjectStart(memberId);
+
+    for (const auto &[key, value] : *_targetCollection) {
+      if constexpr (HasCompositeMappedType) {
+        this->_valueTypeHandler.setTargetMember(value);
+        this->_valueTypeHandler.applyEmitterContext(emitterContext, key);
+      } else {
+        emitterContext.onObjectValueEntry(key, value);
+      }
+    }
+    emitterContext.onObjectFinish();
   }
 
 private:
@@ -487,6 +601,35 @@ private:
       }
       return dispatchForActiveMember<MemberIndex + 1>(
           std::forward<H>(handlerActionFunction));
+    }
+  }
+
+  template <size_t MemberIndex = 0>
+  void applyEmitterContext(auto &emitterContext,
+                           std::optional<MemberIdT> memberId = std::nullopt) {
+    if constexpr (MemberIndex == 0) {
+      emitterContext.onObjectStart(memberId);
+    }
+
+    if constexpr (MemberIndex == std::tuple_size_v<MemberEventHandlerTuple>) {
+      return;
+    } else {
+      auto &nameHandler = std::get<MemberIndex>(_handlerTuple);
+      if constexpr (IMOPEDHandlerC<std::decay_t<decltype(nameHandler.handler)>,
+                                   MemberIdTraits>) {
+        if (MemberIndex == *_activeMemberOffset) {
+          nameHandler.handler.setTargetMember(
+              _captureObject->*(nameHandler.memberPtr));
+        }
+      }
+      nameHandler.handler.applyEmitterContext(emitterContext,
+                                              nameHandler.memberId);
+      return dispatchForActiveMember<MemberIndex + 1>(
+          std::forward<H>(handlerActionFunction));
+    }
+
+    if constexpr (MemberIndex == 0) {
+      emitterContext.onObjectFinish();
     }
   }
 
