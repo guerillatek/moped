@@ -15,12 +15,13 @@
 
 namespace moped {
 
-template <typename NumericT> inline NumericT ston(std::string_view value) {
+template <typename NumericT>
+inline std::expected<NumericT, std::string> ston(std::string_view value) {
   NumericT result;
   auto [ptr, ec] =
       std::from_chars(value.data(), value.data() + value.size(), result);
   if (ec != std::errc{}) {
-    throw std::runtime_error(
+    return std::unexpected(
         std::format("Failed to convert '{}' to numeric", value));
   }
   return result;
@@ -49,7 +50,8 @@ std::expected<TargetT, std::string> getValueFor(std::string_view value) {
                        (std::is_floating_point_v<TargetT>)) {
     return ston<TargetT>(value);
   } else if constexpr (IsOptionalC<TargetT, MemberIdTraits>) {
-    auto result = getValueFor<typename TargetT::value_type, MemberIdTraits>(value);
+    auto result =
+        getValueFor<typename TargetT::value_type, MemberIdTraits>(value);
     if (!result) {
       return std::unexpected(result.error());
     }
@@ -598,7 +600,8 @@ struct MemberIdHandlerPair {
 
   Expected setValue(CaptureT &setTarget, auto value) {
     if constexpr (IsSettableC<MemberT, MemberIdTraits> && requires() {
-                    setTarget.*memberPtr = getValueFor<MemberT, MemberIdTraits>(value).value();
+                    setTarget.*memberPtr =
+                        getValueFor<MemberT, MemberIdTraits>(value).value();
                   }) {
       auto result = getValueFor<MemberT, MemberIdTraits>(value);
       if (!result) {
@@ -753,8 +756,8 @@ private:
             value));
       }
       if (MemberIndex == *_activeMemberOffset) {
-        std::get<MemberIndex>(_handlerTuple).setValue(*_captureObject, value);
-        return {};
+        return std::get<MemberIndex>(_handlerTuple)
+            .setValue(*_captureObject, value);
       }
       return setActiveMemberValue<MemberIndex + 1>(value);
     }

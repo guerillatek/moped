@@ -18,7 +18,7 @@
 
 namespace moped {
 
-template <typename TimePointFormatter = DefaultTimePointFormatter<>>
+template <typename TimePointFormatter = DurationSinceEpochFormatter<>>
 class JSONEmitterContext {
 public:
   JSONEmitterContext(std::ostream &output) : _output(output) {}
@@ -115,9 +115,11 @@ private:
 };
 
 template <typename T, typename... FormatArgs>
-void encodeToJSONStream(const T &mopedObject, std::ostream &output, FormatArgs... args) {
+void encodeToJSONStream(const T &mopedObject, std::ostream &output,
+                        FormatArgs... args) {
   JSONEmitterContext<FormatArgs...> context(output);
-  auto handler = getMOPEDHandlerForParser<T, StringMemberIdTraits<FormatArgs...>>();
+  auto handler =
+      getMOPEDHandlerForParser<T, StringMemberIdTraits<FormatArgs...>>();
   handler.setTargetMember(const_cast<T &>(mopedObject));
   handler.applyEmitterContext(context);
 }

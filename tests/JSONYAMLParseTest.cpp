@@ -10,9 +10,9 @@
 #include <string>
 #include <vector>
 
-using DFTF = moped::DefaultTimePointFormatter<>;
+using DFTF = moped::DurationSinceEpochFormatter<>;
 
-    std::string_view jsonTestMDConfig = R"(
+std::string_view jsonTestMDConfig = R"(
 {
   "MarketDataService": {
     "sessions": {

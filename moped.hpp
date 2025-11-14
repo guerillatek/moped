@@ -62,7 +62,7 @@ private:
   MOPEDHandlerStack _mopedHandlerStack;
 };
 
-template <typename TimePointFormatter = DefaultTimePointFormatter<>>
+template <typename TimePointFormatter = DurationSinceEpochFormatter<>>
 struct StringMemberIdTraits {
   using MemberIdType = std::string_view;
   static MemberIdType getMemberId(std::string_view name) { return name; }

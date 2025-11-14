@@ -14,7 +14,7 @@
 namespace moped {
 
 template <typename FractionalDurationT = std::chrono::milliseconds>
-class DefaultTimePointFormatter {
+class DurationSinceEpochFormatter {
 public:
   static std::string format(moped::TimePoint value) {
     auto fractionalUnits = std::chrono::duration_cast<FractionalDurationT>(
@@ -56,49 +56,19 @@ public:
   }
 };
 
-class GMTFormatter {
-public:
-  static std::string format(moped::TimePoint value) {
-    std::time_t timeT = std::chrono::system_clock::to_time_t(value);
-    std::tm tm = *std::gmtime(&timeT);
-    char buffer[30];
-    std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &tm);
-    return std::string(buffer);
-  }
-
-  static std::expected<TimePoint, std::string> getTimeValue(auto input) {
-    // Parse the input string for GMT format
-    std::tm tm = {};
-    char timezone[6]; // To capture the timezone part
-    if (sscanf(input.data(), "%4d-%2d-%2dT%2d:%2d:%2d%5s", &tm.tm_year,
-               &tm.tm_mon, &tm.tm_mday, &tm.tm_hour, &tm.tm_min, &tm.tm_sec,
-               timezone) != 7) {
-      return std::unexpected("Invlaid GMT time format");
-    }
-    return std::chrono::system_clock::from_time_t(
-        timegm(&tm)); // Convert to time_point
-  }
-};
-
 template <typename FractionalDurationT = std::chrono::milliseconds>
 class ISO8601Formatter {
 public:
-  static std::string format(moped::TimePoint value) {
-    std::time_t timeT = std::chrono::system_clock::to_time_t(value);
-    std::tm tm = *std::gmtime(&timeT);
-    char buffer[30];
-    std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%S", &tm);
-    auto fractionalUnits = std::chrono::duration_cast<FractionalDurationT>(
-                               value.time_since_epoch())
-                               .count() %
-                           FractionalDurationT::period::den;
-    return std::format("{}.{}Z", buffer, fractionalUnits);
-  }
-
   static std::expected<TimePoint, std::string> getTimeValue(auto input) {
     std::tm tm = {};
-    uint64_t fractionalUnits = 0;
+    // Parse date and time (YYYY-MM-DDTHH:MM:SS)
+    char *fractAndOffsetStart =
+        strptime(input.data(), "%Y-%m-%dT%H:%M:%S", &tm);
+    if (fractAndOffsetStart == nullptr) {
+      return std::unexpected("Invalid ISO8601 time format");
+    }
 
+    uint64_t fractionalUnits = 0;
     // Calculate expected fractional digits based on FractionalDurationT
     constexpr int expectedFractionalDigits = []() {
       constexpr auto den = FractionalDurationT::period::den;
@@ -118,13 +88,8 @@ public:
                   "Unsupported FractionalDurationT - must be seconds, "
                   "milliseconds, microseconds, or nanoseconds");
 
-    // Parse date and time (YYYY-MM-DDTHH:MM:SS)
-    if (strptime(input.data(), "%Y-%m-%dT%H:%M:%S", &tm) == nullptr) {
-      return std::unexpected("Invalid ISO8601 time format");
-    }
-
     // Move to fractional part if exists
-    const char *frac_start = strchr(input.data(), '.');
+    const char *frac_start = strchr(fractAndOffsetStart, '.');
     if (frac_start) {
       frac_start++; // Skip the dot
       int frac_len = 0;
@@ -165,8 +130,9 @@ public:
 
     // Parse timezone offset if exists
     int tz_offset = 0;
-    const char *tz_start = frac_start ? frac_start + strcspn(frac_start, "+-Z")
-                                      : input.data() + input.size();
+    const char *tz_start = frac_start
+                               ? frac_start + strcspn(frac_start, "+-Z")
+                               : fractAndOffsetStart + strcspn(fractAndOffsetStart, "+-Z");
     if (*tz_start == '+' || *tz_start == '-') {
       int sign = (*tz_start == '-') ? -1 : 1;
       if (strlen(tz_start) >= 6) {
@@ -188,19 +154,47 @@ public:
 };
 
 template <typename FractionalDurationT = std::chrono::milliseconds>
-class LocalTimeFormatter {
+class ISO8601GMTFormatter : public ISO8601Formatter<FractionalDurationT> {
 public:
   static std::string format(moped::TimePoint value) {
     std::time_t timeT = std::chrono::system_clock::to_time_t(value);
-    std::tm tm = *std::localtime(&timeT);
+    std::tm tm = *std::gmtime(&timeT);
     char buffer[30];
     std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%S", &tm);
     auto fractionalUnits = std::chrono::duration_cast<FractionalDurationT>(
                                value.time_since_epoch())
                                .count() %
                            FractionalDurationT::period::den;
-
     return std::format("{}.{}Z", buffer, fractionalUnits);
+  }
+};
+
+template <typename FractionalDurationT = std::chrono::milliseconds>
+class ISO8601LocalFormatter : public ISO8601Formatter<FractionalDurationT> {
+public:
+  static std::string format(moped::TimePoint value) {
+    std::time_t timeT = std::chrono::system_clock::to_time_t(value);
+    std::tm tm = *std::localtime(&timeT);
+    char buffer[30];
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%S", &tm);
+
+    auto fractionalUnits = std::chrono::duration_cast<FractionalDurationT>(
+                               value.time_since_epoch())
+                               .count() %
+                           FractionalDurationT::period::den;
+
+    // Get timezone offset
+    char tz_buffer[10];
+    std::strftime(tz_buffer, sizeof(tz_buffer), "%z", &tm);
+
+    // Format timezone offset with colon (e.g., +05:00 instead of +0500)
+    std::string tz_offset(tz_buffer);
+    if (tz_offset.length() == 5 &&
+        (tz_offset[0] == '+' || tz_offset[0] == '-')) {
+      tz_offset.insert(3, ":");
+    }
+
+    return std::format("{}.{}{}", buffer, fractionalUnits, tz_offset);
   }
 };
 
