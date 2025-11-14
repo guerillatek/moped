@@ -26,62 +26,43 @@ template <typename NumericT> inline NumericT ston(std::string_view value) {
   return result;
 }
 
-inline std::optional<TimePoint> getEpochTimeValue(std::string_view input) {
-  // Make sure the input is numeric
-  if (input.empty() || !std::all_of(input.begin(), input.end(),
-                                    [](char c) { return std::isdigit(c); })) {
-    return std::nullopt; // Invalid input
-  }
-
-  // Convert string to 64-bit integer
-  auto durationValue =
-      ScaledInteger<std::uint64_t, 0>{input}.getRawIntegerValue();
-  size_t digits = input.size();
-  using namespace std::chrono;
-
-  if (digits <= 10) {
-    return time_point<system_clock, nanoseconds>(seconds(durationValue));
-  } else if (digits <= 13) {
-    return time_point<system_clock, nanoseconds>(milliseconds(durationValue));
-  } else if (digits <= 16) {
-    return time_point<system_clock, nanoseconds>(microseconds(durationValue));
-  } else if (digits <= 19) {
-    return time_point<system_clock, nanoseconds>(nanoseconds(durationValue));
-  } else {
-    return std::nullopt; // Invalid input
-  }
-}
-
-template <typename TargetT> auto getValueFor(std::string_view value) {
+template <typename TargetT, typename MemberIdTraits>
+std::expected<TargetT, std::string> getValueFor(std::string_view value) {
   if constexpr (std::is_same_v<TargetT, bool>) {
     if (value == "true" || value == "1") {
       return true;
     } else if (value == "false" || value == "0") {
       return false;
     } else {
-      throw std::runtime_error("Invalid boolean value: " + std::string{value});
+      return std::unexpected("Invalid boolean value: " + std::string{value});
     }
   } else if constexpr (std::is_same_v<TargetT, TimePoint>) {
-    auto epochTime = getEpochTimeValue(value);
+    auto epochTime = MemberIdTraits::TimePointFormaterT::getTimeValue(value);
     if (!epochTime) {
-      throw std::runtime_error("Invalid epoch time value: " +
-                               std::string{value});
+      throw std::runtime_error(epochTime.error());
     }
-    return *epochTime;
+    return epochTime.value();
   } else if constexpr (std::is_same_v<TargetT, std::string> ||
                        std::is_same_v<TargetT, std::string_view>) {
-    return value;
+    return TargetT{value};
   } else if constexpr ((std::is_integral_v<TargetT>) ||
                        (std::is_floating_point_v<TargetT>)) {
     return ston<TargetT>(value);
-  } else if constexpr (is_optional<TargetT>) {
-    return getValueFor<typename TargetT::value_type>(value);
+  } else if constexpr (IsOptionalC<TargetT, MemberIdTraits>) {
+    auto result = getValueFor<typename TargetT::value_type, MemberIdTraits>(value);
+    if (!result) {
+      return std::unexpected(result.error());
+    }
+    return result.value();
   } else if constexpr (is_scaled_int<TargetT>) {
     return TargetT{value};
   }
 }
 
-template <typename TargetT> auto getValueFor(bool value) { return value; }
+template <typename TargetT, typename MemberIdTraits>
+std::expected<bool, std::string> getValueFor(bool value) {
+  return value;
+}
 
 template <typename MemberT, MemberIdTraitsC MemberIdTraits> struct Handler {
   using MemberType = MemberT;
@@ -114,45 +95,48 @@ struct Handler<MemberT, MemberIdTraits>
       IsMOPEDCompositeC<typename MemberT::value_type, MemberIdTraits>;
   using MOPEDHandlerStack = std::stack<IMOPEDHandler<MemberIdTraits> *>;
 
-  void onMember(MOPEDHandlerStack &eventHandlerStack,
-                MemberIdType memberId) override {
-    throw std::runtime_error("Parse error!!! onObjectFinish event not expected"
-                             " in collection handler");
+  Expected onMember(MOPEDHandlerStack &eventHandlerStack,
+                    MemberIdType memberId) override {
+    return std::unexpected("Parse error!!! onObjectFinish event not expected"
+                           " in collection handler");
   }
 
-  void onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
+  Expected onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
     if constexpr (HasCompositeValueType) {
       _targetCollection->emplace_back();
       this->_valueTypeHandler.setTargetMember(_targetCollection->back());
-      this->_valueTypeHandler.onObjectStart(eventHandlerStack);
+      return this->_valueTypeHandler.onObjectStart(eventHandlerStack);
     }
+    return {};
   }
 
-  void onObjectFinish(MOPEDHandlerStack &handlerStack) override {
-    throw std::runtime_error("Parse error!!! onObjectFinish event not expected"
-                             " in collection handler");
+  Expected onObjectFinish(MOPEDHandlerStack &handlerStack) override {
+    return std::unexpected("Parse error!!! onObjectFinish event not expected"
+                           " in collection handler");
   }
 
-  void onArrayStart(MOPEDHandlerStack &handlerStack) override {
+  Expected onArrayStart(MOPEDHandlerStack &handlerStack) override {
     handlerStack.push(this);
+    return {};
   }
-  void onArrayFinish(MOPEDHandlerStack &handlerStack) override {
+  Expected onArrayFinish(MOPEDHandlerStack &handlerStack) override {
     handlerStack.pop();
+    return {};
   }
 
-  void onStringValue(std::string_view value) override {
-    HandleScalarValue(value);
+  Expected onStringValue(std::string_view value) override {
+    return HandleScalarValue(value);
   }
 
-  void onNumericValue(std::string_view value) override {
-    HandleScalarValue(value);
+  Expected onNumericValue(std::string_view value) override {
+    return HandleScalarValue(value);
   }
 
   void setTargetMember(MemberT &targetMember) {
     _targetCollection = &targetMember;
   }
 
-  void applyEmitterContext(auto &emitterContext, memberId) {
+  void applyEmitterContext(auto &emitterContext, MemberIdType memberId) {
     emitterContext.onArrayStart(memberId, _targetCollection->size());
 
     for (auto &item : *_targetCollection) {
@@ -168,13 +152,18 @@ struct Handler<MemberT, MemberIdTraits>
   }
 
 private:
-  void HandleScalarValue(std::string_view value) {
+  Expected HandleScalarValue(std::string_view value) {
     if constexpr (HasCompositeValueType) {
-      throw std::runtime_error(
+      return std::unexpected(
           "Parse error!!! No active composite handler to set value");
     } else {
-      _targetCollection->emplace_back(getValueFor<ValueType>(value));
+      auto result = getValueFor<ValueType, MemberIdTraits>(value);
+      if (!result) {
+        return std::unexpected(result.error());
+      }
+      _targetCollection->emplace_back(result.value());
     }
+    return {};
   }
 
   MemberT *_targetCollection;
@@ -192,57 +181,66 @@ struct Handler<MemberT, MemberIdTraits>
       IsMOPEDCompositeC<typename MemberT::value_type, MemberIdTraits>;
   using MOPEDHandlerStack = std::stack<IMOPEDHandler<MemberIdTraits> *>;
 
-  void onMember(MOPEDHandlerStack &eventHandlerStack,
-                MemberIdType memberId) override {
-    throw std::runtime_error("Parse error!!! onObjectFinish event not expected"
-                             " in dispatching handler");
+  Expected onMember(MOPEDHandlerStack &eventHandlerStack,
+                    MemberIdType memberId) override {
+    return std::unexpected("Parse error!!! onObjectFinish event not expected"
+                           " in dispatching handler");
   }
 
-  void onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
+  Expected onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
     _dispatcher->dispatcherLastCapture();
     this->_valueTypeHandler.setTargetMember(_dispatcher->resetCapture());
-    this->_valueTypeHandler.onObjectStart(eventHandlerStack);
+    return this->_valueTypeHandler.onObjectStart(eventHandlerStack);
   }
 
-  void onObjectFinish(MOPEDHandlerStack &handlerStack) override {
-    throw std::runtime_error("Parse error!!! onObjectFinish event not expected"
-                             " in dispatching handler");
+  Expected onObjectFinish(MOPEDHandlerStack &handlerStack) override {
+    return std::unexpected("Parse error!!! onObjectFinish event not expected"
+                           " in dispatching handler");
   }
 
-  void onArrayStart(MOPEDHandlerStack &handlerStack) override {
+  Expected onArrayStart(MOPEDHandlerStack &handlerStack) override {
     handlerStack.push(this);
+    return {};
   }
-  void onArrayFinish(MOPEDHandlerStack &handlerStack) override {
+
+  Expected onArrayFinish(MOPEDHandlerStack &handlerStack) override {
     _dispatcher->dispatcherLastCapture();
     handlerStack.pop();
+    return {};
   }
 
-  void onStringValue(std::string_view value) override {
+  Expected onStringValue(std::string_view value) override {
     HandleScalarValue(value);
+    return {};
   }
 
-  void onNumericValue(std::string_view value) override {
+  Expected onNumericValue(std::string_view value) override {
     HandleScalarValue(value);
+    return {};
   }
 
   void setTargetMember(MemberT &targetMember) { _dispatcher = &targetMember; }
 
   void applyEmitterContext(auto &emitterContext,
                            std::optional<MemberIdType> memberId) {
-    throw std::runtime_error("Emission not supported for types with function "
-                             "dispatchers for members");
+    return std::unexpected("Emission not supported for types that use function "
+                           "dispatchers in lieu of collection types");
   }
 
 private:
-  void HandleScalarValue(std::string_view value) {
+  Expected HandleScalarValue(std::string_view value) {
     if constexpr (HasCompositeValueType) {
-      throw std::runtime_error(
+      return std::unexpected(
           "Parse error!!! No active composite handler to set value");
     } else {
-
-      _dispatcher->setCurrentValue(getValueFor<ValueType>(value));
+      auto result = getValueFor<ValueType, MemberIdTraits>(value);
+      if (!result) {
+        return std::unexpected(result.error());
+      }
+      _dispatcher->setCurrentValue(result.value());
       _dispatcher->dispatcherLastCapture();
     }
+    return {};
   }
 
   MemberT *_dispatcher;
@@ -261,57 +259,72 @@ struct Handler<MemberT, MemberIdTraits>
   using MemberIdT = typename MemberIdTraits::MemberIdType;
   using MOPEDHandlerStack = std::stack<IMOPEDHandler<MemberIdTraits> *>;
 
-  void onMember(MOPEDHandlerStack &eventHandlerStack,
-                MemberIdT memberId) override {
-    throw std::runtime_error("Parse error!!! onMember event not expected in "
-                             "array handler");
+  Expected onMember(MOPEDHandlerStack &eventHandlerStack,
+                    MemberIdT memberId) override {
+    return std::unexpected("Parse error!!! onMember event not expected in "
+                           "array handler");
   }
 
-  void onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
+  Expected onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
 
     if constexpr (HasCompositeValueType) {
       if (_currentIndex >= std::size(_targetArray)) {
-        throw std::runtime_error("Index out of bounds");
+        return std::unexpected("Index out of bounds");
       }
 
       this->_valueTypeHandler.setTargetMember(_targetArray[_currentIndex]);
-      this->_valueTypeHandler.onObjectStart(eventHandlerStack);
+      auto result = this->_valueTypeHandler.onObjectStart(eventHandlerStack);
+      if (!result) {
+        return result;
+      }
     } else {
-      throw std::runtime_error(
+      return std::unexpected(
           "Parse error!!! onObjectStart event not expected in array "
           "with scalar value types");
     }
     ++_currentIndex;
   }
 
-  virtual void onObjectFinish(MOPEDHandlerStack &handlerStack) {
-    throw std::runtime_error(
+  virtual Expected onObjectFinish(MOPEDHandlerStack &handlerStack) {
+    return std::unexpected(
         "Parse error!!! onObjectFinish event not expected for array handler");
   }
 
-  virtual void onArrayStart(MOPEDHandlerStack &handlerStack) {
+  virtual Expected onArrayStart(MOPEDHandlerStack &handlerStack) {
     handlerStack.push(this);
     _currentIndex = 0;
+    return {};
   }
 
-  virtual void onArrayFinish(MOPEDHandlerStack &handlerStack) {
+  virtual Expected onArrayFinish(MOPEDHandlerStack &handlerStack) {
     handlerStack.pop();
+    return {};
   }
 
-  void onStringValue(std::string_view value) override {
+  Expected onStringValue(std::string_view value) override {
     if (_currentIndex >= std::size(_targetArray)) {
-      throw std::runtime_error("Index out of bounds");
+      return std::unexpected("Index out of bounds");
     }
-    _targetArray[_currentIndex] = getValueFor<MemberT>(value);
+    auto result = getValueFor<ValueType, MemberIdTraits>(value);
+    if (!result) {
+      return std::unexpected(result.error());
+    }
+    _targetArray[_currentIndex] = result.value();
     ++_currentIndex;
+    return {};
   }
 
-  void onNumericValue(std::string_view value) override {
+  Expected onNumericValue(std::string_view value) override {
     if (_currentIndex >= std::size(_targetArray)) {
-      throw std::runtime_error("Index out of bounds");
+      return std::unexpected("Index out of bounds");
     }
-    _targetArray[_currentIndex] = getValueFor<MemberT>(value);
+    auto result = getValueFor<MemberT, MemberIdTraits>(value);
+    if (!result) {
+      return std::unexpected(result.error());
+    }
+    _targetArray[_currentIndex] = result.value();
     ++_currentIndex;
+    return {};
   }
 
   void setTargetMember(MemberT &targetMember) { _targetArray = &targetMember; }
@@ -333,14 +346,19 @@ struct Handler<MemberT, MemberIdTraits>
   }
 
 private:
-  void HandleScalarValue(std::string_view value) {
+  Expected HandleScalarValue(std::string_view value) {
     if constexpr (HasCompositeValueType) {
-      throw std::runtime_error(
+      return std::unexpected(
           "Parse error!!! No active composite handler to set value");
     } else {
-      _targetArray[_currentIndex] = getValueFor<MemberT>(value);
+      auto result = getValueFor<ValueType, MemberIdTraits>(value);
+      if (!result) {
+        return std::unexpected(result.error());
+      }
+      _targetArray[_currentIndex] = result.value();
       ++_currentIndex;
     }
+    return {};
   }
 
   MemberT *_targetArray;
@@ -360,55 +378,60 @@ struct Handler<MemberT, MemberIdTraits>
       IsMOPEDCompositeC<typename MemberT::mapped_type, MemberIdTraits>;
   using MOPEDHandlerStack = std::stack<IMOPEDHandler<MemberIdTraits> *>;
 
-  void onMember(MOPEDHandlerStack &eventHandlerStack,
-                MemberIdType memberId) override {
+  Expected onMember(MOPEDHandlerStack &eventHandlerStack,
+                    MemberIdType memberId) override {
     _currentKey = memberId;
+    return {};
   }
 
-  void onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
+  Expected onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
     if (!_addingContent) {
       _addingContent = true;
       eventHandlerStack.push(this);
-      return;
+      return {};
     }
     if constexpr (HasCompositeMappedType) {
       this->_valueTypeHandler.setTargetMember(
           (*_targetCollection)[_currentKey]);
-      this->_valueTypeHandler.onObjectStart(eventHandlerStack);
+      return this->_valueTypeHandler.onObjectStart(eventHandlerStack);
     } else {
-      throw std::runtime_error(
+      return std::unexpected(
           "Parse error!!! onObjectStart event not expected in collection "
           "with scalar value types");
     }
+    return {};
   }
 
-  void onObjectFinish(MOPEDHandlerStack &handlerStack) override {
+  Expected onObjectFinish(MOPEDHandlerStack &handlerStack) override {
     handlerStack.pop();
     _addingContent = false;
+    return {};
   }
 
-  void onArrayStart(MOPEDHandlerStack &handlerStack) override {
+  Expected onArrayStart(MOPEDHandlerStack &handlerStack) override {
     handlerStack.push(this);
+    return {};
   }
-  void onArrayFinish(MOPEDHandlerStack &handlerStack) override {
+  Expected onArrayFinish(MOPEDHandlerStack &handlerStack) override {
     handlerStack.pop();
     _addingContent = false;
+    return {};
   }
 
-  void onStringValue(std::string_view value) override {
-    HandleScalarValue(value);
+  Expected onStringValue(std::string_view value) override {
+    return HandleScalarValue(value);
   }
 
-  void onNumericValue(std::string_view value) override {
-    HandleScalarValue(value);
+  Expected onNumericValue(std::string_view value) override {
+    return HandleScalarValue(value);
   }
 
   void setTargetMember(MemberT &targetMember) {
     _targetCollection = &targetMember;
   }
 
-  applyEmitterContext(auto &emitterContext,
-                      std::optional<MemberIdType> memberId) {
+  void applyEmitterContext(auto &emitterContext,
+                           std::optional<MemberIdType> memberId) {
     emitterContext.onObjectStart(memberId);
 
     for (const auto &[key, value] : *_targetCollection) {
@@ -423,13 +446,18 @@ struct Handler<MemberT, MemberIdTraits>
   }
 
 private:
-  void HandleScalarValue(std::string_view value) {
+  Expected HandleScalarValue(std::string_view value) {
     if constexpr (HasCompositeMappedType) {
-      throw std::runtime_error(
+      return std::unexpected(
           "Parse error!!! No active composite handler to set value");
     } else {
-      (*_targetCollection)[_currentKey] = getValueFor<MappedType>(value);
+      auto result = getValueFor<MappedType, MemberIdTraits>(value);
+      if (!result) {
+        return std::unexpected(result.error());
+      }
+      (*_targetCollection)[_currentKey] = result.value();
     }
+    return {};
   }
 
   MemberT *_targetCollection;
@@ -437,7 +465,8 @@ private:
   bool _addingContent{false};
 };
 
-template <is_optional MemberT, MemberIdTraitsC MemberIdTraits>
+template <typename MemberT, MemberIdTraitsC MemberIdTraits>
+  requires(IsOptionalC<MemberT, MemberIdTraits>)
 struct Handler<MemberT, MemberIdTraits>
     : Handler<typename MemberT::value_type, MemberIdTraits> {
 
@@ -465,6 +494,99 @@ struct Handler<MemberT, MemberIdTraits>
       : HandlerBase(MemberT::template getMOPEDHandler<MemberIdTraits>()) {}
 };
 
+template <MemberIdTraitsC MemberIdTraits, typename T>
+struct FinalMultiMopedHandlerHarness {
+  using HandlerT =
+      std::decay_t<decltype(getMOPEDHandlerForParser<MemberIdTraits, T>())>;
+  HandlerT handler;
+  template <typename TargetType> auto &getHandlerForType() {
+    if constexpr (std::is_same_v<TargetType, T>) {
+      return handler;
+    } else {
+      static_assert(false, "Type not found in MultiMopedHandlerHarness");
+    }
+  }
+};
+
+template <MemberIdTraitsC MemberIdTraits, typename T, typename... MOPEDTypes>
+struct MultiMopedHandlerHarness;
+
+template <MemberIdTraitsC MemberIdTraits, typename T, typename... MOPEDTypes>
+constexpr auto getMultiMopedHandlerHarness() {
+  if constexpr (sizeof...(MOPEDTypes) == 1) {
+    return FinalMultiMopedHandlerHarness<MemberIdTraits, T>{};
+  } else {
+    return MultiMopedHandlerHarness<MemberIdTraits, T, MOPEDTypes...>{};
+  }
+};
+
+template <MemberIdTraitsC MemberIdTraits, typename T, typename... MOPEDTypes>
+struct MultiMopedHandlerHarness {
+  using HandlerT =
+      std::decay_t<decltype(getMOPEDHandlerForParser<MemberIdTraits, T>())>;
+  using TailHandlersT = std::decay_t<
+      decltype(getMultiMopedHandlerHarness<MemberIdTraits, MOPEDTypes...>())>;
+  HandlerT handler;
+  TailHandlersT tailHandlers;
+
+  template <typename TargetType> auto &getHandlerForType() {
+    if constexpr (std::is_same_v<TargetType, T>) {
+      return handler;
+    } else {
+      return tailHandlers.template getHandlerForType<TargetType>();
+    }
+  }
+};
+
+template <MemberIdTraitsC MemberIdTraits, typename... MOPEDTypes>
+constexpr auto
+getMultiMopedHandlerHarnessFromVariant(std::variant<MOPEDTypes...>) {
+  return getMultiMopedHandlerHarness<MemberIdTraits, MOPEDTypes...>();
+};
+
+template <is_variant VariantT, MemberIdTraitsC MemberIdTraits>
+struct Handler<VariantT, MemberIdTraits> : IMOPEDHandler<MemberIdTraits> {
+
+  using MemberType = VariantT;
+  using MemberIdT = typename MemberIdTraits::MemberIdType;
+  using MultiMopedHandlerHarness =
+      std::decay_t<decltype(getMultiMopedHandlerHarnessFromVariant<
+                            MemberIdTraits>(VariantT{}))>;
+
+  using MOPEDHandlerStack = std::stack<IMOPEDHandler<MemberIdTraits> *>;
+  Expected onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
+    return std::visit(
+        [this, &eventHandlerStack](auto &selected) {
+          using SelectedT = std::decay_t<decltype(selected)>;
+          auto &handler =
+              _handlerHarness.template getHandlerForType<SelectedT>();
+          handler.setTargetMember(selected);
+          return handler.onObjectStart(eventHandlerStack);
+        },
+        *_captureVariant);
+  }
+
+  void applyEmitterContext(auto &emitterContext, MemberIdT memberId) {
+    std::visit(
+        [this, &emitterContext, &memberId](auto &selected) {
+          using SelectedT = std::decay_t<decltype(selected)>;
+          auto &handler =
+              _handlerHarness.template getHandlerForType<SelectedT>();
+          handler.setTargetMember(selected);
+          handler.applyEmitterContext(emitterContext, memberId);
+        },
+        *_captureVariant);
+  }
+
+  void setTargetMember(MemberType &targetMember) {
+    _captureVariant = &targetMember;
+  }
+
+private:
+  MultiMopedHandlerHarness _handlerHarness;
+  VariantT *_captureVariant;
+};
+
 template <typename CaptureT, typename MemberPtrT,
           MemberIdTraitsC MemberIdTraits>
 struct MemberIdHandlerPair {
@@ -474,12 +596,26 @@ struct MemberIdHandlerPair {
   using MemberT = std::decay_t<decltype(std::declval<CaptureT>().*
                                         std::declval<MemberPtrT>())>;
 
-  void setValue(CaptureT &setTarget, auto value) {
-    if constexpr (IsSettable<MemberT> && requires() {
-                    setTarget.*memberPtr = getValueFor<MemberT>(value);
+  Expected setValue(CaptureT &setTarget, auto value) {
+    if constexpr (IsSettableC<MemberT, MemberIdTraits> && requires() {
+                    setTarget.*memberPtr = getValueFor<MemberT, MemberIdTraits>(value).value();
                   }) {
+      auto result = getValueFor<MemberT, MemberIdTraits>(value);
+      if (!result) {
+        return std::unexpected(result.error());
+      }
+      setTarget.*memberPtr = result.value();
+    }
+    return {};
+  }
 
-      setTarget.*memberPtr = getValueFor<MemberT>(value);
+  void applyEmitterContext(auto &emitterContext, CaptureT &captureTarget) {
+    auto &memberValue = captureTarget.*memberPtr;
+    if constexpr (IMOPEDHandlerC<decltype(handler), MemberIdTraits>) {
+      handler.setTargetMember(memberValue);
+      handler.applyEmitterContext(emitterContext, memberId);
+    } else {
+      emitterContext.onObjectValueEntry(memberId, memberValue);
     }
   }
 
@@ -498,111 +634,56 @@ struct MappedObjectParserEncoderDispatcher : IMOPEDHandler<MemberIdTraits> {
   MappedObjectParserEncoderDispatcher(MemberEventHandlerTuple &&handlerTuple)
       : _handlerTuple{std::move(handlerTuple)} {}
 
-  void onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
+  Expected onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
     if (!_activeMemberOffset.has_value()) {
       eventHandlerStack.push(this);
-      return;
+      return {};
     }
 
-    dispatchForActiveMember<0>([&eventHandlerStack](auto &handler) {
-      handler.onObjectStart(eventHandlerStack);
+    return dispatchForActiveMember<0>([&eventHandlerStack](auto &handler) {
+      return handler.onObjectStart(eventHandlerStack);
     });
   }
 
-  void onObjectFinish(MOPEDHandlerStack &eventHandlerStack) override {
+  Expected onObjectFinish(MOPEDHandlerStack &eventHandlerStack) override {
     _activeMemberOffset.reset();
     eventHandlerStack.pop();
+    return {};
   }
 
-  void onArrayStart(MOPEDHandlerStack &eventHandlerStack) override {
+  Expected onArrayStart(MOPEDHandlerStack &eventHandlerStack) override {
     if (!_activeMemberOffset.has_value()) {
       eventHandlerStack.push(this);
-      return;
+      return {};
     }
 
-    dispatchForActiveMember<0>([&eventHandlerStack](auto &handler) {
-      handler.onArrayStart(eventHandlerStack);
+    return dispatchForActiveMember<0>([&eventHandlerStack](auto &handler) {
+      return handler.onArrayStart(eventHandlerStack);
     });
   }
 
-  void onMember(MOPEDHandlerStack &eventHandlerStack,
-                MemberIdT memberId) override {
-    setActiveMember<0>(memberId, eventHandlerStack);
+  Expected onMember(MOPEDHandlerStack &eventHandlerStack,
+                    MemberIdT memberId) override {
+    return setActiveMember<0>(memberId, eventHandlerStack);
   }
 
-  void onStringValue(std::string_view value) override {
-    setActiveMemberValue<0>(value);
+  Expected onStringValue(std::string_view value) override {
+    return setActiveMemberValue<0>(value);
   }
 
-  void onNumericValue(std::string_view value) {
-    setActiveMemberValue<0>(value);
+  Expected onNumericValue(std::string_view value) {
+    return setActiveMemberValue<0>(value);
   }
 
-  void onBooleanValue(bool value) override { setActiveMemberValue<0>(value); }
+  Expected onBooleanValue(bool value) override {
+    return setActiveMemberValue<0>(value);
+  }
 
   void setTargetMember(CaptureType &targetMember) {
     _captureObject = &targetMember;
   }
 
-  void onArrayFinish(MOPEDHandlerStack &handlerStack) {}
-
-private:
-  template <size_t MemberIndex>
-  void setActiveMember(MemberIdT memberId,
-                       MOPEDHandlerStack &eventHandlerStack) {
-    if constexpr (MemberIndex == std::tuple_size_v<MemberEventHandlerTuple>) {
-      throw std::runtime_error(
-          std::format("Member, '{}' not found in MOPED handler", memberId));
-    } else {
-      auto &nameHandler = std::get<MemberIndex>(_handlerTuple);
-      if (nameHandler.memberId == memberId) {
-        _activeMemberOffset = MemberIndex;
-        return;
-      }
-      return setActiveMember<MemberIndex + 1>(memberId, eventHandlerStack);
-    }
-  }
-
-  template <size_t MemberIndex> void setActiveMemberValue(auto value) {
-    if constexpr (MemberIndex == std::tuple_size_v<MemberEventHandlerTuple>) {
-      throw std::runtime_error("Parse error ... no active member available");
-    } else {
-      if (!_activeMemberOffset.has_value()) {
-        throw std::runtime_error(std::format(
-            "Parse error ... no active member available for current value {}",
-            value));
-      }
-      if (MemberIndex == *_activeMemberOffset) {
-        std::get<MemberIndex>(_handlerTuple).setValue(*_captureObject, value);
-        return;
-      }
-      return setActiveMemberValue<MemberIndex + 1>(value);
-    }
-  }
-
-  template <size_t MemberIndex, typename H>
-  void dispatchForActiveMember(H &&handlerActionFunction) {
-    if constexpr (MemberIndex == std::tuple_size_v<MemberEventHandlerTuple>) {
-      throw std::runtime_error("Parse error ... no active member available");
-    } else {
-      if (!_activeMemberOffset.has_value()) {
-        throw std::runtime_error(
-            "Parse error ... no active member available for current object");
-      }
-      auto &nameHandler = std::get<MemberIndex>(_handlerTuple);
-      if constexpr (IMOPEDHandlerC<std::decay_t<decltype(nameHandler.handler)>,
-                                   MemberIdTraits>) {
-        if (MemberIndex == *_activeMemberOffset) {
-          nameHandler.handler.setTargetMember(
-              _captureObject->*(nameHandler.memberPtr));
-          handlerActionFunction(nameHandler.handler);
-          return;
-        }
-      }
-      return dispatchForActiveMember<MemberIndex + 1>(
-          std::forward<H>(handlerActionFunction));
-    }
-  }
+  Expected onArrayFinish(MOPEDHandlerStack &handlerStack) { return {}; }
 
   template <size_t MemberIndex = 0>
   void applyEmitterContext(auto &emitterContext,
@@ -612,24 +693,93 @@ private:
     }
 
     if constexpr (MemberIndex == std::tuple_size_v<MemberEventHandlerTuple>) {
-      return;
+      return; // No more members to process
     } else {
+      std::get<MemberIndex>(_handlerTuple)
+          .applyEmitterContext(emitterContext, *_captureObject);
+      // Recursively apply emitter context for all composite members
+      applyEmitterContext<MemberIndex + 1>(emitterContext, memberId);
+    }
+
+    if constexpr (MemberIndex == 0) {
+      emitterContext.onObjectFinish();
+    }
+  }
+
+private:
+  template <size_t MemberIndex>
+  Expected setActiveMember(MemberIdT memberId,
+                           MOPEDHandlerStack &eventHandlerStack) {
+    if constexpr (MemberIndex == std::tuple_size_v<MemberEventHandlerTuple>) {
+      return std::unexpected(
+          std::format("Member, '{}' not found in MOPED handler", memberId));
+    } else {
+      auto &nameHandler = std::get<MemberIndex>(_handlerTuple);
+      if (nameHandler.memberId == memberId) {
+        _activeMemberOffset = MemberIndex;
+        return {};
+      } else if (nameHandler.memberId == MemberIdTraits::EmbeddingMemberId) {
+        if constexpr (IMOPEDHandlerC<
+                          std::decay_t<decltype(nameHandler.handler)>,
+                          MemberIdTraits>) {
+          // If we haven't found the target member before the embedding member,
+          // we need to set the embedding handler as the active handler and hand
+          // off the current event to it.
+          nameHandler.handler.setTargetMember(
+              _captureObject->*(nameHandler.memberPtr));
+          eventHandlerStack.pop();
+          Expected result =
+              nameHandler.handler.onObjectStart(eventHandlerStack);
+          if (!result) {
+            return result;
+          }
+          return nameHandler.handler.onMember(eventHandlerStack, memberId);
+        } else {
+          return std::unexpected("Embedded members must be a composite type");
+        }
+      }
+
+      return setActiveMember<MemberIndex + 1>(memberId, eventHandlerStack);
+    }
+  }
+
+  template <size_t MemberIndex> Expected setActiveMemberValue(auto value) {
+    if constexpr (MemberIndex == std::tuple_size_v<MemberEventHandlerTuple>) {
+      return std::unexpected("Parse error ... no active member available");
+    } else {
+      if (!_activeMemberOffset.has_value()) {
+        return std::unexpected(std::format(
+            "Parse error ... no active member available for current value {}",
+            value));
+      }
+      if (MemberIndex == *_activeMemberOffset) {
+        std::get<MemberIndex>(_handlerTuple).setValue(*_captureObject, value);
+        return {};
+      }
+      return setActiveMemberValue<MemberIndex + 1>(value);
+    }
+  }
+
+  template <size_t MemberIndex, typename H>
+  Expected dispatchForActiveMember(H &&handlerActionFunction) {
+    if constexpr (MemberIndex == std::tuple_size_v<MemberEventHandlerTuple>) {
+      return std::unexpected("Parse error ... no active member available");
+    } else {
+      if (!_activeMemberOffset.has_value()) {
+        return std::unexpected(
+            "Parse error ... no active member available for current object");
+      }
       auto &nameHandler = std::get<MemberIndex>(_handlerTuple);
       if constexpr (IMOPEDHandlerC<std::decay_t<decltype(nameHandler.handler)>,
                                    MemberIdTraits>) {
         if (MemberIndex == *_activeMemberOffset) {
           nameHandler.handler.setTargetMember(
               _captureObject->*(nameHandler.memberPtr));
+          return handlerActionFunction(nameHandler.handler);
         }
       }
-      nameHandler.handler.applyEmitterContext(emitterContext,
-                                              nameHandler.memberId);
       return dispatchForActiveMember<MemberIndex + 1>(
           std::forward<H>(handlerActionFunction));
-    }
-
-    if constexpr (MemberIndex == 0) {
-      emitterContext.onObjectFinish();
     }
   }
 

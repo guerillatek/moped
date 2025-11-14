@@ -101,22 +101,33 @@ public:
           std::format("Expected an object start, '{{' but got {}", c));
     }
     vs.push(c);
-    _eventDispatch.onObjectStart();
+
+    auto objectStartResult = _eventDispatch.onObjectStart();
+    if (!objectStartResult) {
+      return objectStartResult; // Both are Expected, return directly
+    }
+
     ParseState parseState = ParseState::MemberName;
 
     while (!vs.empty()) {
       char c;
       switch (parseState) {
-      case Object:
+      case Object: {
         ss >> c;
         if (c != '{') {
           return std::unexpected(
               std::format("Expected an object start, '{{' but got {}", c));
         }
-        _eventDispatch.onObjectStart();
+
+        auto objectStartResult = _eventDispatch.onObjectStart();
+        if (!objectStartResult) {
+          return objectStartResult; // Both are Expected, return directly
+        }
+
         vs.push(c);
         parseState = ParseState::MemberName;
         break;
+      }
       case MemberName: {
         auto expectedText = getMemberText(ss);
         if (!expectedText) {
@@ -129,7 +140,11 @@ public:
               std::format("Expected ':' in member definition but got {}", c));
         }
         parseState = ParseState::OpenValue;
-        _eventDispatch.onMember(expectedText.value());
+
+        auto memberResult = _eventDispatch.onMember(expectedText.value());
+        if (!memberResult) {
+          return memberResult; // Both are Expected, return directly
+        }
       } break;
       case OpenValue: {
         ss >> std::ws;
@@ -139,12 +154,15 @@ public:
         case '{':
           parseState = ParseState::Object;
           continue;
-          ;
         case '[':
           parseState = ParseState::Array;
-          _eventDispatch.onArrayStart();
+          {
+            auto arrayStartResult = _eventDispatch.onArrayStart();
+            if (!arrayStartResult) {
+              return arrayStartResult; // Both are Expected, return directly
+            }
+          }
           continue;
-          ;
         case '"': {
           ss.get(); // consume the opening quote
           auto expectedText = getStringValueText(ss);
@@ -152,7 +170,12 @@ public:
             return std::unexpected(
                 std::format("{} in jsonText", expectedText.error()));
           }
-          _eventDispatch.onStringValue(expectedText.value());
+
+          auto stringValueResult =
+              _eventDispatch.onStringValue(expectedText.value());
+          if (!stringValueResult) {
+            return stringValueResult; // Both are Expected, return directly
+          }
         } break;
         case 't':
         case 'f': {
@@ -162,9 +185,15 @@ public:
             boolText += ss.get();
           }
           if (boolText == "true") {
-            _eventDispatch.onBooleanValue(true);
+            auto boolResult = _eventDispatch.onBooleanValue(true);
+            if (!boolResult) {
+              return boolResult; // Both are Expected, return directly
+            }
           } else if (boolText == "false") {
-            _eventDispatch.onBooleanValue(false);
+            auto boolResult = _eventDispatch.onBooleanValue(false);
+            if (!boolResult) {
+              return boolResult; // Both are Expected, return directly
+            }
           } else {
             return std::unexpected(
                 std::format("Invalid boolean value '{}'", boolText));
@@ -174,13 +203,18 @@ public:
         case '}':
           parseState = ParseState::CloseValue;
           continue;
-          break;
-        default:
+        default: {
           auto expectedText = getNumericValueText(ss);
           if (!expectedText) {
             return std::unexpected(std::format("{}", expectedText.error()));
           }
-          _eventDispatch.onNumericValue(expectedText.value());
+
+          auto numericResult =
+              _eventDispatch.onNumericValue(expectedText.value());
+          if (!numericResult) {
+            return numericResult; // Both are Expected, return directly
+          }
+        }
         };
         parseState = ParseState::CloseValue;
         // We've processed an atomic value
@@ -211,7 +245,12 @@ public:
             return std::unexpected(
                 std::format("Invalid json parse, unexpected character, {}", c));
           }
-          _eventDispatch.onArrayFinish();
+
+          auto arrayFinishResult = _eventDispatch.onArrayFinish();
+          if (!arrayFinishResult) {
+            return arrayFinishResult; // Both are Expected, return directly
+          }
+
           vs.pop();
         } break;
         case '}': {
@@ -219,7 +258,12 @@ public:
             return std::unexpected(
                 std::format("Invalid json parse, unexpected character, {}", c));
           }
-          _eventDispatch.onObjectFinish();
+
+          auto objectFinishResult = _eventDispatch.onObjectFinish();
+          if (!objectFinishResult) {
+            return objectFinishResult; // Both are Expected, return directly
+          }
+
           vs.pop();
         } break;
         };

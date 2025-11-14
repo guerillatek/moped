@@ -4,12 +4,14 @@
 
 namespace moped {
 
-template <typename CompositeT, typename... Args>
-  requires IsMOPEDCompositeC<CompositeT, StringMemberIdTraits>
+template <typename CompositeT, typename TimeFormatterT, typename... Args>
+  requires IsMOPEDCompositeC<CompositeT, StringMemberIdTraits<TimeFormatterT>>
 std::expected<CompositeT, std::string>
-parseCompositeFromYAMLView(std::string_view yamlView, Args &&...args) {
+parseCompositeFromYAMLView(TimeFormatterT, std::string_view yamlView,
+                           Args &&...args) {
   using DispatcherT =
-      CompositeParserEventDispatcher<CompositeT, StringMemberIdTraits>;
+      CompositeParserEventDispatcher<CompositeT,
+                                     StringMemberIdTraits<TimeFormatterT>>;
   DispatcherT dispatcher{std::forward<Args>(args)...};
   YAMLParser<DispatcherT> parser{};
   if (auto result = parser.parseInputView(yamlView); !result) {

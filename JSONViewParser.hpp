@@ -85,20 +85,31 @@ public:
     if (it == end || *it != '{')
       return std::unexpected("Expected object start '{'");
     vs.push(*it++);
-    _eventDispatch.onObjectStart();
+
+    auto objectStartResult = _eventDispatch.onObjectStart();
+    if (!objectStartResult) {
+      return objectStartResult; // Both are Expected, return directly
+    }
+
     enum class ParseState { MemberName, OpenValue, Object, Array, CloseValue };
     ParseState parseState = ParseState::MemberName;
 
     while (!vs.empty()) {
       skipWhitespace(it, end);
       switch (parseState) {
-      case ParseState::Object:
+      case ParseState::Object: {
         if (it == end || *it != '{')
           return std::unexpected("Expected object start '{'");
-        _eventDispatch.onObjectStart();
+
+        auto objectStartResult = _eventDispatch.onObjectStart();
+        if (!objectStartResult) {
+          return objectStartResult; // Both are Expected, return directly
+        }
+
         vs.push(*it++);
         parseState = ParseState::MemberName;
         break;
+      }
       case ParseState::MemberName: {
         auto expectedText = getMemberText(it, end);
         if (!expectedText)
@@ -108,7 +119,11 @@ public:
           return std::unexpected("Expected ':' after member name");
         ++it; // skip ':'
         parseState = ParseState::OpenValue;
-        _eventDispatch.onMember(expectedText.value());
+
+        auto memberResult = _eventDispatch.onMember(expectedText.value());
+        if (!memberResult) {
+          return memberResult; // Both are Expected, return directly
+        }
       } break;
       case ParseState::OpenValue: {
         skipWhitespace(it, end);
@@ -118,17 +133,26 @@ public:
         case '{':
           parseState = ParseState::Object;
           continue;
-        case '[':
+        case '[': {
           vs.push(*it++);
-          _eventDispatch.onArrayStart();
+          auto arrayStartResult = _eventDispatch.onArrayStart();
+          if (!arrayStartResult) {
+            return arrayStartResult; // Both are Expected, return directly
+          }
           parseState = ParseState::OpenValue;
           continue;
+        }
         case '"': {
           ++it; // skip opening quote
           auto expectedText = getStringValueText(it, end);
           if (!expectedText)
             return std::unexpected(expectedText.error());
-          _eventDispatch.onStringValue(expectedText.value());
+
+          auto stringValueResult =
+              _eventDispatch.onStringValue(expectedText.value());
+          if (!stringValueResult) {
+            return stringValueResult; // Both are Expected, return directly
+          }
         } break;
         case 't':
         case 'f': {
@@ -138,12 +162,19 @@ public:
             ++it;
           std::string_view boolText{boolStart,
                                     static_cast<size_t>(it - boolStart)};
-          if (boolText == "true")
-            _eventDispatch.onBooleanValue(true);
-          else if (boolText == "false")
-            _eventDispatch.onBooleanValue(false);
-          else
+          if (boolText == "true") {
+            auto boolResult = _eventDispatch.onBooleanValue(true);
+            if (!boolResult) {
+              return boolResult; // Both are Expected, return directly
+            }
+          } else if (boolText == "false") {
+            auto boolResult = _eventDispatch.onBooleanValue(false);
+            if (!boolResult) {
+              return boolResult; // Both are Expected, return directly
+            }
+          } else {
             return std::unexpected("Invalid boolean value");
+          }
         } break;
         case ']':
         case '}':
@@ -153,7 +184,12 @@ public:
           auto expectedText = getNumericValueText(it, end);
           if (!expectedText)
             return std::unexpected(expectedText.error());
-          _eventDispatch.onNumericValue(expectedText.value());
+
+          auto numericResult =
+              _eventDispatch.onNumericValue(expectedText.value());
+          if (!numericResult) {
+            return numericResult; // Both are Expected, return directly
+          }
         }
         }
         parseState = ParseState::CloseValue;
@@ -178,18 +214,30 @@ public:
           else
             return std::unexpected("Unexpected ','");
           break;
-        case ']':
+        case ']': {
           if (vs.top() != '[')
             return std::unexpected("Unexpected ']'");
-          _eventDispatch.onArrayFinish();
+
+          auto arrayFinishResult = _eventDispatch.onArrayFinish();
+          if (!arrayFinishResult) {
+            return arrayFinishResult; // Both are Expected, return directly
+          }
+
           vs.pop();
           break;
-        case '}':
+        }
+        case '}': {
           if (vs.top() != '{')
             return std::unexpected("Unexpected '}'");
-          _eventDispatch.onObjectFinish();
+
+          auto objectFinishResult = _eventDispatch.onObjectFinish();
+          if (!objectFinishResult) {
+            return objectFinishResult; // Both are Expected, return directly
+          }
+
           vs.pop();
           break;
+        }
         default:
           return std::unexpected("Unexpected character after value");
         }

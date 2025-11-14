@@ -54,15 +54,16 @@ constexpr auto getTargetSetVariantFromParams() {
 template <auto key_select_value, typename T, auto... Args>
 class CompositeSelectorValue {
 
-  static constexpr auto SelectableTypesLookup =
-      selectableTypeTuple<key_select_value, T, Args...>();
+  using SelectableTypesLookup =
+      decltype(selectableTypeTuple<key_select_value, T, Args...>());
 
 public:
   using SelectorValueT = decltype(key_select_value);
   using TargetSetVariantT =
-      decltype(getTargetSetVariantFromParams<key_select_value, T.Args...>());
+      decltype(getTargetSetVariantFromParams<key_select_value, T, Args...>());
 
-  CompositeSelectorValue(TargetVariantT &memberVariant) : (value) {}
+  CompositeSelectorValue(TargetSetVariantT &memberVariant)
+      : _targetSetVariant{memberVariant} {}
 
   CompositeSelectorValue &operator=(const SelectorValueT &value) {
     _selectorValue = value;
@@ -70,7 +71,7 @@ public:
   }
 
   operator bool() const {
-    return _value.has_value() && (_targetSetVariant.index() != 0);
+    return _selectorValue.has_value() && (_targetSetVariant.index() != 0);
   }
 
   friend std::ostream &operator<<(std::ostream &os,
@@ -84,14 +85,15 @@ public:
 private:
   TargetSetVariantT
       &_targetSetVariant; // This can refer to mapped member in the
+      
                           // containing class or an embedded member.
   std::optional<SelectorValueT> _selectorValue{};
 
   template <size_t I = 0> void selectTypeForAssignedValue() {
     if constexpr (I < std::tuple_size_v<SelectableTypesLookup>) {
       using CurrentEntry = std::tuple_element_t<I, SelectableTypesLookup>;
-      if (CurrentEntry::key_select_value == *_value) {
-        using MappedType = typename CurrentType::MappedType;
+      if (CurrentEntry::key_select_value == *_selectorValue) {
+        using MappedType = typename CurrentEntry::MappedType;
         _targetSetVariant =
             MappedType{}; // The target variant is now loaded with the
         // appropriate type to capture the future parse values

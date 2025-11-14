@@ -1,9 +1,12 @@
 #pragma once
 
 #include "moped/MappedObjectParseEncoderDispatcher.hpp"
+#include "moped/TimeFormatters.hpp"
 
 #include <expected>
 namespace moped {
+
+using Expected = std::expected<void, std::string>;
 
 template <typename CompositeT, MemberIdTraitsC MemberIdTraits>
   requires IsMOPEDCompositeC<CompositeT, MemberIdTraits>
@@ -20,37 +23,36 @@ struct CompositeParserEventDispatcher {
     _compositeMOPEDHandler.setTargetMember(_composite);
   }
 
-  void onMember(std::string_view memberName) {
-    _mopedHandlerStack.top()->onMember(_mopedHandlerStack, memberName);
+  Expected onMember(std::string_view memberName) {
+    return _mopedHandlerStack.top()->onMember(_mopedHandlerStack, memberName);
   }
-  void onObjectStart() {
+  Expected onObjectStart() {
     if (_mopedHandlerStack.empty()) {
-      _compositeMOPEDHandler.onObjectStart(_mopedHandlerStack);
-      return;
+      return _compositeMOPEDHandler.onObjectStart(_mopedHandlerStack);
     }
-    _mopedHandlerStack.top()->onObjectStart(_mopedHandlerStack);
+    return _mopedHandlerStack.top()->onObjectStart(_mopedHandlerStack);
   }
-  void onObjectFinish() {
-    _mopedHandlerStack.top()->onObjectFinish(_mopedHandlerStack);
-  }
-
-  void onArrayStart() {
-    _mopedHandlerStack.top()->onArrayStart(_mopedHandlerStack);
-  }
-  void onArrayFinish() {
-    _mopedHandlerStack.top()->onArrayFinish(_mopedHandlerStack);
+  Expected onObjectFinish() {
+    return _mopedHandlerStack.top()->onObjectFinish(_mopedHandlerStack);
   }
 
-  void onStringValue(std::string_view value) {
-    _mopedHandlerStack.top()->onStringValue(value);
+  Expected onArrayStart() {
+    return _mopedHandlerStack.top()->onArrayStart(_mopedHandlerStack);
+  }
+  Expected onArrayFinish() {
+    return _mopedHandlerStack.top()->onArrayFinish(_mopedHandlerStack);
   }
 
-  void onNumericValue(std::string_view value) {
-    _mopedHandlerStack.top()->onNumericValue(value);
+  Expected onStringValue(std::string_view value) {
+    return _mopedHandlerStack.top()->onStringValue(value);
   }
 
-  void onBooleanValue(bool value) {
-    _mopedHandlerStack.top()->onBooleanValue(value);
+  Expected onNumericValue(std::string_view value) {
+    return _mopedHandlerStack.top()->onNumericValue(value);
+  }
+
+  Expected onBooleanValue(bool value) {
+    return _mopedHandlerStack.top()->onBooleanValue(value);
   }
   auto &&getComposite() { return std::move(_composite); }
 
@@ -60,15 +62,18 @@ private:
   MOPEDHandlerStack _mopedHandlerStack;
 };
 
+template <typename TimePointFormatter = DefaultTimePointFormatter<>>
 struct StringMemberIdTraits {
   using MemberIdType = std::string_view;
   static MemberIdType getMemberId(std::string_view name) { return name; }
   static std::string getDisplayName(MemberIdType memberId) {
     return std::string{memberId};
   }
+  static constexpr std::string_view EmbeddingMemberId = "";
+  using TimePointFormaterT = TimePointFormatter;
 };
 
-static_assert(MemberIdTraitsC<StringMemberIdTraits>,
+static_assert(MemberIdTraitsC<StringMemberIdTraits<>>,
               "StringMemberIdTraits should satisfy MemberIdTraitsC concept");
 
 } // namespace moped

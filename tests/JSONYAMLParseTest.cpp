@@ -1,4 +1,5 @@
 
+#include "moped/TimeFormatters.hpp"
 #include "moped/mopedJSON.hpp"
 #include "moped/mopedYAML.hpp"
 
@@ -9,7 +10,9 @@
 #include <string>
 #include <vector>
 
-std::string_view jsonTestMDConfig = R"(
+using DFTF = moped::DefaultTimePointFormatter<>;
+
+    std::string_view jsonTestMDConfig = R"(
 {
   "MarketDataService": {
     "sessions": {
@@ -212,13 +215,13 @@ TEST_CASE("Loading a Market data service config definition with moped mapping "
           "using YAML  "
           "[YAML DATA SERVICE CONFIG]") {
   auto result = moped::parseCompositeFromYAMLView<moped::tests::MDConfig>(
-      yamlTestMDConfig);
+      DFTF{}, yamlTestMDConfig);
   TestCompositeValues(result);
 }
 
 TEST_CASE("Same definition, Same mapping but now loading with JSON"
           "[JSON MARKET DATA SERVICE]") {
   auto result = moped::parseCompositeFromJSONView<moped::tests::MDConfig>(
-      jsonTestMDConfig);
+      DFTF{}, jsonTestMDConfig);
   TestCompositeValues(result);
 }

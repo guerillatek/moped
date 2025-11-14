@@ -12,7 +12,7 @@ template <IParserEventDispatchC ParseEventDispatchT> class BoostInfoTreeParser {
   ParseEventDispatchT _eventDispatch;
 
   // Helper to recursively walk the ptree and dispatch events
-  void walk(const boost::property_tree::ptree &node,
+  Expected walk(const boost::property_tree::ptree &node,
             std::string_view key = {}) {
     using ptree = boost::property_tree::ptree;
 
@@ -49,7 +49,10 @@ template <IParserEventDispatchC ParseEventDispatchT> class BoostInfoTreeParser {
       }
       _eventDispatch.onArrayFinish();
     } else {
-      _eventDispatch.onObjectStart();
+      auto result = _eventDispatch.onObjectStart();
+      if (!result) {
+        return std::unexpected(result.error());
+      }
       for (const auto &child : node) {
         walk(child.second, child.first);
       }

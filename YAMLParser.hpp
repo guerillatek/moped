@@ -53,12 +53,18 @@ public:
         break;
       }
       case YAML_MAPPING_START_EVENT: {
-        _eventDispatch.onObjectStart();
+        auto objectStartResult = _eventDispatch.onObjectStart();
+        if (!objectStartResult) {
+          return objectStartResult; // Both are Expected, return directly
+        }
         contextStack.push(Context::MappingKey);
         break;
       }
       case YAML_MAPPING_END_EVENT: {
-        _eventDispatch.onObjectFinish();
+        auto objectFinishResult = _eventDispatch.onObjectFinish();
+        if (!objectFinishResult) {
+          return objectFinishResult; // Both are Expected, return directly
+        }
         if (!contextStack.empty())
           contextStack.pop();
         if ((!contextStack.empty()) &&
@@ -69,12 +75,18 @@ public:
       }
 
       case YAML_SEQUENCE_START_EVENT: {
-        _eventDispatch.onArrayStart();
+        auto arrayStartResult = _eventDispatch.onArrayStart();
+        if (!arrayStartResult) {
+          return arrayStartResult; // Both are Expected, return directly
+        }
         contextStack.push(Context::Sequence);
         break;
       }
       case YAML_SEQUENCE_END_EVENT: {
-        _eventDispatch.onArrayFinish();
+        auto arrayFinishResult = _eventDispatch.onArrayFinish();
+        if (!arrayFinishResult) {
+          return arrayFinishResult; // Both are Expected, return directly
+        }
         if (!contextStack.empty())
           contextStack.pop();
         if ((!contextStack.empty()) &&
@@ -92,17 +104,29 @@ public:
         if (!contextStack.empty() &&
             contextStack.top() == Context::MappingKey) {
           lastKey = value;
-          _eventDispatch.onMember(value);
+          auto memberResult = _eventDispatch.onMember(value);
+          if (!memberResult) {
+            return memberResult; // Both are Expected, return directly
+          }
           contextStack.push(Context::MappingValue);
         } else {
           // Value position (either mapping value or sequence element)
           std::string value_str(value);
           if (value == "true" || value == "false") {
-            _eventDispatch.onBooleanValue(value == "true");
+            auto boolResult = _eventDispatch.onBooleanValue(value == "true");
+            if (!boolResult) {
+              return boolResult; // Both are Expected, return directly
+            }
           } else if (ParserBase::isNumeric(value_str)) {
-            _eventDispatch.onNumericValue(value);
+            auto numericResult = _eventDispatch.onNumericValue(value);
+            if (!numericResult) {
+              return numericResult; // Both are Expected, return directly
+            }
           } else {
-            _eventDispatch.onStringValue(value);
+            auto stringResult = _eventDispatch.onStringValue(value);
+            if (!stringResult) {
+              return stringResult; // Both are Expected, return directly
+            }
           }
           // If we just finished a mapping value, expect a key next
           if (!contextStack.empty() &&

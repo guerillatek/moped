@@ -1,8 +1,13 @@
 #pragma once
 #include <chrono>
+#include <cstring>
+#include <expected>
 #include <format>
 #include <string>
 #include <time.h>
+#include <type_traits>
+
+#include "moped/ScaledInteger.hpp"
 
 #include "concepts.hpp"
 
@@ -12,9 +17,42 @@ template <typename FractionalDurationT = std::chrono::milliseconds>
 class DefaultTimePointFormatter {
 public:
   static std::string format(moped::TimePoint value) {
-    auto fractionalUnits =
-        std::chrono::duration_cast<FractionalDurationT>(epochTime).count();
-    return std::to_string(fractionalUnits);
+    auto fractionalUnits = std::chrono::duration_cast<FractionalDurationT>(
+        value.time_since_epoch());
+    return std::to_string(fractionalUnits.count());
+  }
+
+  static std::expected<TimePoint, std::string>
+  getTimeValue(is_integral auto input) {
+    using namespace std::chrono;
+    return TimePoint{FractionalDurationT{input}};
+  }
+
+  static std::expected<TimePoint, std::string> getTimeValue(auto input) {
+    // Make sure the input is numeric
+    if (input.empty() || !std::all_of(input.begin(), input.end(),
+                                      [](char c) { return std::isdigit(c); })) {
+      return std::unexpected("Invalid input: expected a numeric string "
+                             "representing time units since epoch");
+    }
+
+    // Convert string to 64-bit integer
+    auto durationValue =
+        ScaledInteger<std::uint64_t, 0>{input}.getRawIntegerValue();
+    size_t digits = input.size();
+    using namespace std::chrono;
+
+    if (digits <= 10) {
+      return time_point<system_clock, nanoseconds>(seconds(durationValue));
+    } else if (digits <= 13) {
+      return time_point<system_clock, nanoseconds>(milliseconds(durationValue));
+    } else if (digits <= 16) {
+      return time_point<system_clock, nanoseconds>(microseconds(durationValue));
+    } else if (digits <= 19) {
+      return time_point<system_clock, nanoseconds>(nanoseconds(durationValue));
+    }
+    return std::unexpected(
+        "Invalid input: too many digits for a valid time point");
   }
 };
 
@@ -26,6 +64,19 @@ public:
     char buffer[30];
     std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &tm);
     return std::string(buffer);
+  }
+
+  static std::expected<TimePoint, std::string> getTimeValue(auto input) {
+    // Parse the input string for GMT format
+    std::tm tm = {};
+    char timezone[6]; // To capture the timezone part
+    if (sscanf(input.data(), "%4d-%2d-%2dT%2d:%2d:%2d%5s", &tm.tm_year,
+               &tm.tm_mon, &tm.tm_mday, &tm.tm_hour, &tm.tm_min, &tm.tm_sec,
+               timezone) != 7) {
+      return std::unexpected("Invlaid GMT time format");
+    }
+    return std::chrono::system_clock::from_time_t(
+        timegm(&tm)); // Convert to time_point
   }
 };
 
@@ -42,6 +93,97 @@ public:
                                .count() %
                            FractionalDurationT::period::den;
     return std::format("{}.{}Z", buffer, fractionalUnits);
+  }
+
+  static std::expected<TimePoint, std::string> getTimeValue(auto input) {
+    std::tm tm = {};
+    uint64_t fractionalUnits = 0;
+
+    // Calculate expected fractional digits based on FractionalDurationT
+    constexpr int expectedFractionalDigits = []() {
+      constexpr auto den = FractionalDurationT::period::den;
+      // Count trailing zeros in powers of 10
+      // 1 = 0 digits, 1000 = 3 digits, 1000000 = 6 digits, etc.
+      int digits = 0;
+      auto temp = den;
+      while (temp > 1 && temp % 10 == 0) {
+        temp /= 10;
+        digits++;
+      }
+      // Validate that it's a clean power of 10
+      return (temp == 1) ? digits : -1; // -1 for unsupported denominators
+    }();
+
+    static_assert(expectedFractionalDigits >= 0,
+                  "Unsupported FractionalDurationT - must be seconds, "
+                  "milliseconds, microseconds, or nanoseconds");
+
+    // Parse date and time (YYYY-MM-DDTHH:MM:SS)
+    if (strptime(input.data(), "%Y-%m-%dT%H:%M:%S", &tm) == nullptr) {
+      return std::unexpected("Invalid ISO8601 time format");
+    }
+
+    // Move to fractional part if exists
+    const char *frac_start = strchr(input.data(), '.');
+    if (frac_start) {
+      frac_start++; // Skip the dot
+      int frac_len = 0;
+
+      // Count actual fractional digits in input
+      while (frac_start[frac_len] >= '0' && frac_start[frac_len] <= '9') {
+        frac_len++;
+      }
+
+      // Validate fractional digit count
+      if constexpr (expectedFractionalDigits == 0) {
+        if (frac_len > 0) {
+          return std::unexpected(
+              "Fractional seconds not allowed for seconds precision");
+        }
+      } else {
+        if (frac_len > expectedFractionalDigits) {
+          return std::unexpected(
+              std::format("Too many fractional digits: expected max {}, got {}",
+                          expectedFractionalDigits, frac_len));
+        }
+      }
+
+      // Parse fractional digits
+      frac_len = 0;
+      while (frac_len < expectedFractionalDigits &&
+             frac_start[frac_len] >= '0' && frac_start[frac_len] <= '9') {
+        fractionalUnits = fractionalUnits * 10 + (frac_start[frac_len] - '0');
+        frac_len++;
+      }
+
+      // Pad with zeros if fewer digits than expected
+      while (frac_len < expectedFractionalDigits) {
+        fractionalUnits *= 10;
+        frac_len++;
+      }
+    }
+
+    // Parse timezone offset if exists
+    int tz_offset = 0;
+    const char *tz_start = frac_start ? frac_start + strcspn(frac_start, "+-Z")
+                                      : input.data() + input.size();
+    if (*tz_start == '+' || *tz_start == '-') {
+      int sign = (*tz_start == '-') ? -1 : 1;
+      if (strlen(tz_start) >= 6) {
+        int hours = (tz_start[1] - '0') * 10 + (tz_start[2] - '0');
+        int minutes = (tz_start[4] - '0') * 10 + (tz_start[5] - '0');
+        tz_offset = sign * (hours * 3600 + minutes * 60);
+      }
+    }
+
+    // Calculate epoch time using constexpr denominator
+    constexpr auto den = FractionalDurationT::period::den;
+    uint64_t seconds_since_epoch =
+        static_cast<uint64_t>(timegm(&tm)) - tz_offset;
+    uint64_t total_units = seconds_since_epoch * den + fractionalUnits;
+
+    return std::chrono::system_clock::time_point(
+        FractionalDurationT(total_units));
   }
 };
 

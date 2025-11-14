@@ -34,14 +34,14 @@ concept PayloadHandlerC = requires(T t) {
 
 template <typename T>
 concept IParserEventDispatchC = requires(T t) {
-  { t.onMember(std::string_view{}) } -> std::same_as<void>;
-  { t.onObjectStart() } -> std::same_as<void>;
-  { t.onObjectFinish() } -> std::same_as<void>;
-  { t.onArrayStart() } -> std::same_as<void>;
-  { t.onArrayFinish() } -> std::same_as<void>;
-  { t.onStringValue(std::string_view{}) } -> std::same_as<void>;
-  { t.onBooleanValue(bool{}) } -> std::same_as<void>;
-  { t.onNumericValue(std::string_view{}) } -> std::same_as<void>;
+  { t.onMember(std::string_view{}) } -> std::same_as<Expected>;
+  { t.onObjectStart() } -> std::same_as<Expected>;
+  { t.onObjectFinish() } -> std::same_as<Expected>;
+  { t.onArrayStart() } -> std::same_as<Expected>;
+  { t.onArrayFinish() } -> std::same_as<Expected>;
+  { t.onStringValue(std::string_view{}) } -> std::same_as<Expected>;
+  { t.onBooleanValue(bool{}) } -> std::same_as<Expected>;
+  { t.onNumericValue(std::string_view{}) } -> std::same_as<Expected>;
 };
 
 template <MemberIdTraitsC MemberIdTraits> struct IMOPEDHandler {
@@ -49,37 +49,44 @@ template <MemberIdTraitsC MemberIdTraits> struct IMOPEDHandler {
   using MemberIdT = typename MemberIdTraits::MemberIdType;
 
   virtual ~IMOPEDHandler() = default;
-  // Used by the JSONValidator
-  virtual void onMember(MOPEDHandlerStack &handlerStack, MemberIdT memberId) {
-    throw std::runtime_error("Unhandled member event");
-  }
-  virtual void onObjectStart(MOPEDHandlerStack &handlerStack) {
-    throw std::runtime_error("Unhandled object start event");
-  }
-  virtual void onObjectFinish(MOPEDHandlerStack &handlerStack) {
-    throw std::runtime_error("Unhandled object finish event");
-  }
-  virtual void onArrayStart(MOPEDHandlerStack &handlerStack) {
-    throw std::runtime_error("Unhandled array start event");
-  }
-  virtual void onArrayFinish(MOPEDHandlerStack &handlerStack) {
-    throw std::runtime_error("Unhandled array finish event");
-  }
-  virtual void onStringValue(std::string_view value) {
-    throw std::runtime_error("Unhandled string value event");
-  }
-  virtual void onNumericValue(std::string_view value) {
-    throw std::runtime_error("Unhandled numeric value event");
-  }
-  virtual void onBooleanValue(bool value) {
-    throw std::runtime_error("Unhandled boolean value event");
+
+  virtual Expected onMember(MOPEDHandlerStack &handlerStack,
+                            MemberIdT memberId) {
+    return std::unexpected("Unhandled member event");
   }
 
-  virtual void onRawBinary(void *value) {
-    throw std::runtime_error("Unhandled binary value event");
+  virtual Expected onObjectStart(MOPEDHandlerStack &handlerStack) {
+    return std::unexpected("Unhandled object start event");
+  }
+
+  virtual Expected onObjectFinish(MOPEDHandlerStack &handlerStack) {
+    return std::unexpected("Unhandled object finish event");
+  }
+
+  virtual Expected onArrayStart(MOPEDHandlerStack &handlerStack) {
+    return std::unexpected("Unhandled array start event");
+  }
+
+  virtual Expected onArrayFinish(MOPEDHandlerStack &handlerStack) {
+    return std::unexpected("Unhandled array finish event");
+  }
+
+  virtual Expected onStringValue(std::string_view value) {
+    return std::unexpected("Unhandled string value event");
+  }
+
+  virtual Expected onNumericValue(std::string_view value) {
+    return std::unexpected("Unhandled numeric value event");
+  }
+
+  virtual Expected onBooleanValue(bool value) {
+    return std::unexpected("Unhandled boolean value event");
+  }
+
+  virtual Expected onRawBinary(void *value) {
+    return std::unexpected("Unhandled binary value event");
   }
 };
-
 
 template <typename T, typename MemberIdTraits>
 concept IMOPEDHandlerC = std::derived_from<T, IMOPEDHandler<MemberIdTraits>>;
@@ -100,6 +107,20 @@ concept is_mapped_enum = requires(T t) {
   { t = std::string_view{} };
   { t.getEnumValue() } -> is_enum;
 };
+
+template <typename T> struct is_variant_t : std::false_type {};
+
+template <typename... Types>
+struct is_variant_t<std::variant<Types...>> : std::true_type {};
+
+template <typename T>
+inline constexpr bool is_variant_v = is_variant_t<T>::value;
+
+template <typename T>
+concept is_variant = is_variant_v<std::remove_cvref_t<T>>;
+
+template <typename T>
+concept is_integral = std::is_integral_v<T>;
 
 template <typename T>
 concept IsMOPEDValueC =
@@ -162,20 +183,24 @@ concept IsMOPEDContentCollectionC =
 template <typename T>
 concept is_array = std::is_array_v<T>;
 
-template <typename T>
-concept is_optional = requires(T t) {
+template <typename T, typename MemberIdTraits>
+concept IsOptionalC = requires(T t) {
   { t.has_value() } -> std::same_as<bool>;
   { t.value() } -> std::same_as<typename T::value_type &>;
-};
+} && IsMOPEDContentC<typename T::value_type, MemberIdTraits>;
 
 template <typename T, typename MemberIdTraits>
 concept IsMOPEDTypeC =
     IsMOPEDContentC<T, MemberIdTraits> || IsMOPEDContentCollectionC<T> ||
-    is_optional<T> || IsMOPEDCompositeDispatcherC<T>;
+    IsOptionalC<T, MemberIdTraits> || IsMOPEDCompositeDispatcherC<T>;
 
 template <typename T>
-concept IsSettable = IsMOPEDValueC<T> ||
-                     (is_optional<T> && IsMOPEDValueC<typename T::value_type>);
+concept IsSettableVariantC = ISettableVariant(T{});
+
+template <typename T, typename MemberIdTraits>
+concept IsSettableC =
+    IsMOPEDValueC<T> ||
+    (IsOptionalC<T, MemberIdTraits> && IsMOPEDValueC<typename T::value_type>);
 
 template <typename T, typename MemberIdTraits>
 concept IsCompositeCollectionC =

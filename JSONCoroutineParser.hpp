@@ -18,22 +18,25 @@ namespace moped {
 template <IParserEventDispatchC ParseEventDispatchT>
 class JSONCoroutineParser : public ParserBase {
 public:
-private:
-  using ExpectedText = std::expected<std::string, std::string>;
-  using ValidatorStack = std::stack<char>;
-
   struct ParseResult {
     struct promise_type {
+      std::optional<Expected> result;
+      std::exception_ptr exception;
+
       ParseResult get_return_object() {
         return ParseResult{
             std::coroutine_handle<promise_type>::from_promise(*this)};
       }
       std::suspend_always initial_suspend() { return {}; }
       std::suspend_always final_suspend() noexcept { return {}; }
-      void return_void() {}
-      void unhandled_exception() { exception = std::current_exception(); }
 
-      std::exception_ptr exception;
+      void return_void() {
+        result = Expected{}; // Success
+      }
+
+      void return_value(Expected value) { result = value; }
+
+      void unhandled_exception() { exception = std::current_exception(); }
     };
 
     std::coroutine_handle<promise_type> handle;
@@ -72,24 +75,46 @@ private:
     }
 
     bool done() const { return !handle || handle.done(); }
+
+    std::optional<Expected> getResult() const {
+      if (handle && handle.done()) {
+        return handle.promise().result;
+      }
+      return std::nullopt;
+    }
   };
+
+private:
+  using ExpectedText = std::expected<std::string, std::string>;
+  using ValidatorStack = std::stack<char>;
 
   ParseEventDispatchT _eventDispatch;
   std::string _activeStreamContent;
   std::ispanstream _activeStream;
-  bool _finalFrame{false}
+  std::string _pendingBuffer;
+  bool _finalFrame{false};
 
   // Parser state
   ValidatorStack _validatorStack;
   ParseState _parseState = ParseState::MemberName;
   bool _isInitialized = false;
 
+  // Buffer for accumulating partial reads
+  std::string _partialBuffer;
+  std::string _reusableBuffer;
+  enum class PartialState {
+    None,
+    MemberName,
+    StringValue,
+    NumericValue,
+    BooleanValue
+  } _partialState = PartialState::None;
 
   // Check if stream has data available, suspend if not
   std::suspend_always checkStreamAndSuspend() { return {}; }
 
   // Safe stream read with suspension on EOF
-  std::awaitable<bool> safeStreamRead(char &c) {
+  bool safeStreamRead(char &c) {
     if (_activeStream.eof()) {
       return false;
     }
@@ -149,168 +174,190 @@ public:
 
 private:
   ParseResult parseCoroutine() {
-    try {
-      if (!_isInitialized) {
-        // Initial setup
-        char c;
-        _activeStream >> std::ws;
+    if (!_isInitialized) {
+      // Initial setup
+      char c;
+      _activeStream >> std::ws;
 
+      if (!safeStreamRead(c)) {
+        co_await checkStreamAndSuspend();
+        if (!safeStreamRead(c)) {
+          co_return std::unexpected(
+              "Stream ended unexpectedly during initialization");
+        }
+      }
+
+      if (c != '{') {
+        co_return std::unexpected(
+            std::format("Expected an object start, '{{' but got {}", c));
+      }
+
+      _validatorStack.push(c);
+      auto result = _eventDispatch.onObjectStart();
+      if (!result) {
+        co_return std::unexpected(result.error());
+      }
+      _parseState = ParseState::MemberName;
+      _isInitialized = true;
+    }
+
+    while (!_validatorStack.empty()) {
+      char c;
+
+      switch (_parseState) {
+      case ParseState::Object: {
         if (!safeStreamRead(c)) {
           co_await checkStreamAndSuspend();
-          if (!safeStreamRead(c)) {
-            throw std::runtime_error(
-                "Stream ended unexpectedly during initialization");
-          }
+          continue;
         }
 
         if (c != '{') {
-          throw std::runtime_error(
+          co_return std::unexpected(
               std::format("Expected an object start, '{{' but got {}", c));
         }
-
+        auto result = _eventDispatch.onObjectStart();
+        if (!result) {
+          co_return std::unexpected(result.error());
+        }
         _validatorStack.push(c);
-        _eventDispatch.onObjectStart();
         _parseState = ParseState::MemberName;
-        _isInitialized = true;
-      }
+      } break;
 
-      while (!_validatorStack.empty()) {
-        char c;
+      case ParseState::MemberName: {
+        auto result = co_await getMemberTextAsync();
+        if (!result) {
+          co_return std::unexpected(result.error());
+        }
 
-        switch (_parseState) {
-        case ParseState::Object: {
-          if (!safeStreamRead(c)) {
-            co_await checkStreamAndSuspend();
-            continue;
+        _activeStream >> std::ws;
+        if (!safeStreamRead(c)) {
+          co_await checkStreamAndSuspend();
+          continue;
+        }
+
+        if (c != ':') {
+          co_return std::unexpected(
+              std::format("Expected ':' in member definition but got {}", c));
+        }
+
+        _parseState = ParseState::OpenValue;
+        auto memberResult = _eventDispatch.onMember(result.value());
+        if (!memberResult) {
+          co_return std::unexpected(memberResult.error());
+        }
+      } break;
+
+      case ParseState::OpenValue: {
+        _activeStream >> std::ws;
+
+        if (!safeStreamPeek(c)) {
+          co_await checkStreamAndSuspend();
+          continue;
+        }
+
+        switch (c) {
+        case '{':
+          _parseState = ParseState::Object;
+          continue;
+        case '[':
+          _parseState = ParseState::Array;
+          {
+            auto arrayResult = _eventDispatch.onArrayStart();
+            if (!arrayResult) {
+              co_return std::unexpected(arrayResult.error());
+            }
           }
-
-          if (c != '{') {
-            throw std::runtime_error(
-                std::format("Expected an object start, '{{' but got {}", c));
-          }
-          _eventDispatch.onObjectStart();
-          _validatorStack.push(c);
-          _parseState = ParseState::MemberName;
-        } break;
-
-        case ParseState::MemberName: {
-          auto result = co_await getMemberTextAsync();
+          continue;
+        case '"': {
+          _activeStream.get(); // consume quote
+          auto result = co_await getStringValueTextAsync();
           if (!result) {
-            throw std::runtime_error(result.error());
+            co_return std::unexpected(result.error());
           }
-
-          _activeStream >> std::ws;
-          if (!safeStreamRead(c)) {
-            co_await checkStreamAndSuspend();
-            continue;
+          auto stringResult = _eventDispatch.onStringValue(result.value());
+          if (!stringResult) {
+            co_return std::unexpected(stringResult.error());
           }
-
-          if (c != ':') {
-            throw std::runtime_error(
-                std::format("Expected ':' in member definition but got {}", c));
-          }
-
-          _parseState = ParseState::OpenValue;
-          _eventDispatch.onMember(result.value());
         } break;
-
-        case ParseState::OpenValue: {
-          _activeStream >> std::ws;
-
-          if (!safeStreamPeek(c)) {
-            co_await checkStreamAndSuspend();
-            continue;
+        case 't':
+        case 'f': {
+          auto result = co_await getBooleanValueAsync();
+          if (!result) {
+            co_return std::unexpected(result.error());
           }
-
-          switch (c) {
-          case '{':
-            _parseState = ParseState::Object;
-            continue;
-          case '[':
-            _parseState = ParseState::Array;
-            _eventDispatch.onArrayStart();
-            continue;
-          case '"': {
-            _activeStream.get(); // consume quote
-            auto result = co_await getStringValueTextAsync();
-            if (!result) {
-              throw std::runtime_error(result.error());
-            }
-            _eventDispatch.onStringValue(result.value());
-          } break;
-          case 't':
-          case 'f': {
-            auto result = co_await getBooleanValueAsync();
-            if (!result) {
-              throw std::runtime_error(result.error());
-            }
-            _eventDispatch.onBooleanValue(result.value());
-          } break;
-          case ']':
-          case '}':
-            _parseState = ParseState::CloseValue;
-            continue;
-          default: {
-            auto result = co_await getNumericValueTextAsync();
-            if (!result) {
-              throw std::runtime_error(result.error());
-            }
-            _eventDispatch.onNumericValue(result.value());
+          auto boolResult = _eventDispatch.onBooleanValue(result.value());
+          if (!boolResult) {
+            co_return std::unexpected(boolResult.error());
           }
-          }
+        } break;
+        case ']':
+        case '}':
           _parseState = ParseState::CloseValue;
+          continue;
+        default: {
+          auto result = co_await getNumericValueTextAsync();
+          if (!result) {
+            co_return std::unexpected(result.error());
+          }
+          auto numericResult = _eventDispatch.onNumericValue(result.value());
+          if (!numericResult) {
+            co_return std::unexpected(numericResult.error());
+          }
+        }
+        }
+        _parseState = ParseState::CloseValue;
+      } break;
+
+      case ParseState::Array: {
+        if (!safeStreamRead(c)) {
+          co_await checkStreamAndSuspend();
+          continue;
+        }
+        _validatorStack.push(c);
+        _parseState = ParseState::OpenValue;
+      } break;
+
+      case ParseState::CloseValue: {
+        if (!safeStreamRead(c)) {
+          co_await checkStreamAndSuspend();
+          continue;
+        }
+
+        switch (c) {
+        case ',': {
+          if (_validatorStack.top() == '{') {
+            _parseState = ParseState::MemberName;
+          } else if (_validatorStack.top() == '[') {
+            _parseState = ParseState::OpenValue;
+          }
         } break;
-
-        case ParseState::Array: {
-          if (!safeStreamRead(c)) {
-            co_await checkStreamAndSuspend();
-            continue;
+        case ']': {
+          if (_validatorStack.top() != '[') {
+            co_return std::unexpected(
+                std::format("Invalid json parse, unexpected character, {}", c));
           }
-          _validatorStack.push(c);
-          _parseState = ParseState::OpenValue;
+          auto arrayFinishResult = _eventDispatch.onArrayFinish();
+          if (!arrayFinishResult) {
+            co_return std::unexpected(arrayFinishResult.error());
+          }
+          _validatorStack.pop();
         } break;
-
-        case ParseState::CloseValue: {
-          if (!safeStreamRead(c)) {
-            co_await checkStreamAndSuspend();
-            continue;
+        case '}': {
+          if (_validatorStack.top() != '{') {
+            co_return std::unexpected(
+                std::format("Invalid json parse, unexpected character, {}", c));
           }
-
-          switch (c) {
-          case ',': {
-            if (_validatorStack.top() == '{') {
-              _parseState = ParseState::MemberName;
-            } else if (_validatorStack.top() == '[') {
-              _parseState = ParseState::OpenValue;
-            }
-          } break;
-          case ']': {
-            if (_validatorStack.top() != '[') {
-              throw std::runtime_error(std::format(
-                  "Invalid json parse, unexpected character, {}", c));
-            }
-            _eventDispatch.onArrayFinish();
-            _validatorStack.pop();
-          } break;
-          case '}': {
-            if (_validatorStack.top() != '{') {
-              throw std::runtime_error(std::format(
-                  "Invalid json parse, unexpected character, {}", c));
-            }
-            _eventDispatch.onObjectFinish();
-            _validatorStack.pop();
-          } break;
+          auto objectFinishResult = _eventDispatch.onObjectFinish();
+          if (!objectFinishResult) {
+            co_return std::unexpected(objectFinishResult.error());
           }
+          _validatorStack.pop();
         } break;
         }
+      } break;
       }
-    } catch (...) {
-      // Save current stream position for resumption
-      saveStreamState();
-      throw;
     }
-
-    co_return;
+    co_return Expected{}; // Success
   }
 
   std::awaitable<ExpectedText> getMemberTextAsync() {

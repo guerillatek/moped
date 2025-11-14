@@ -200,22 +200,28 @@ public:
           std::format("Expected an object start, '{{' but got {}", c));
     }
     vs.push(c);
-    _eventDispatch.onObjectStart();
+    auto result = _eventDispatch.onObjectStart();
+    if (!result) {
+      co_return std::unexpected(result.error());
+    }
     ParseState parseState = ParseState::MemberName;
 
     while (!vs.empty()) {
       char c;
       switch (parseState) {
-      case Object:
+      case Object: {
         _activeStream >> c;
         if (c != '{') {
           co_return std::unexpected(
               std::format("Expected an object start, '{{' but got {}", c));
         }
-        _eventDispatch.onObjectStart();
+        auto result = _eventDispatch.onObjectStart();
+        if (!result) {
+          co_return std::unexpected(result.error());
+        }
         vs.push(c);
         parseState = ParseState::MemberName;
-        break;
+      }; break;
       case MemberName: {
         auto expectedText = getMemberText();
         if (!expectedText) {
@@ -236,7 +242,10 @@ public:
               std::format("Expected ':' in member definition but got {}", c));
         }
         parseState = ParseState::OpenValue;
-        _eventDispatch.onMember(expectedText.value());
+        auto result = _eventDispatch.onMember(expectedText.value());
+        if (!result) {
+          co_return std::unexpected(result.error());
+        }
       } break;
       case OpenValue: {
         if (auto result = co_await coWaitForValidStream(
@@ -255,11 +264,14 @@ public:
           parseState = ParseState::Object;
           continue;
           ;
-        case '[':
+        case '[': {
           parseState = ParseState::Array;
-          _eventDispatch.onArrayStart();
+          auto result = _eventDispatch.onArrayStart();
+          if (!result) {
+            co_return std::unexpected(result.error());
+          }
           continue;
-          ;
+        }
         case '"': {
           _activeStream.get(); // consume the opening quote
           auto expectedText = getStringValueText();
@@ -267,7 +279,10 @@ public:
             co_return std::unexpected(
                 std::format("{} in jsonText", expectedText.error()));
           }
-          _eventDispatch.onStringValue(expectedText.value());
+          auto result = _eventDispatch.onStringValue(expectedText.value());
+          if (!result) {
+            co_return std::unexpected(result.error());
+          }
         } break;
         case 't':
         case 'f': {
@@ -287,9 +302,15 @@ public:
             }
           }
           if (boolText == "true") {
-            _eventDispatch.onBooleanValue(true);
+            auto result = _eventDispatch.onBooleanValue(true);
+            if (!result) {
+              co_return std::unexpected(result.error());
+            }
           } else if (boolText == "false") {
-            _eventDispatch.onBooleanValue(false);
+            auto result = _eventDispatch.onBooleanValue(false);
+            if (!result) {
+              co_return std::unexpected(result.error());
+            }
           } else {
             co_return std::unexpected(
                 std::format("Invalid boolean value '{}'", boolText));
@@ -305,7 +326,10 @@ public:
           if (!expectedText) {
             co_return std::unexpected(std::format("{}", expectedText.error()));
           }
-          _eventDispatch.onNumericValue(expectedText.value());
+          auto result = _eventDispatch.onNumericValue(expectedText.value());
+          if (!result) {
+            co_return std::unexpected(result.error());
+          }
         };
         parseState = ParseState::CloseValue;
         // We've processed an atomic value
@@ -336,8 +360,11 @@ public:
             co_return std::unexpected(
                 std::format("Invalid json parse, unexpected character, {}", c));
           }
-          _eventDispatch.onArrayFinish();
-          expecting vs.pop();
+          auto result = _eventDispatch.onArrayFinish();
+          if (!result) {
+            co_return std::unexpected(result.error());
+          }
+          vs.pop();
         } break;
         case '}': {
           if (vs.top() != '{') {
