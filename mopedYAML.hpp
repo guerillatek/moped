@@ -17,7 +17,7 @@ parseCompositeFromYAMLView(TimeFormatterT, std::string_view yamlView,
   if (auto result = parser.parseInputView(yamlView); !result) {
     return std::unexpected(result.error());
   }
-  return parser.getDispatcher().getComposite();
+  return parser.getDispatcher().moveComposite();
 }
 
 } // namespace moped

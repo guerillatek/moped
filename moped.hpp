@@ -54,7 +54,18 @@ struct CompositeParserEventDispatcher {
   Expected onBooleanValue(bool value) {
     return _mopedHandlerStack.top()->onBooleanValue(value);
   }
-  auto &&getComposite() { return std::move(_composite); }
+
+  auto &&moveComposite() { return std::move(_composite); }
+
+  auto &getComposite() { return _composite; }
+
+  template <typename... Args> void reset(Args &&...args) {
+    _composite = CompositeT{
+        std::forward<Args>(args)...}; // Reset composite with new args
+    while (!_mopedHandlerStack.empty()) {
+      _mopedHandlerStack.pop();
+    }
+  }
 
 private:
   CompositeMOPEDHandler _compositeMOPEDHandler;

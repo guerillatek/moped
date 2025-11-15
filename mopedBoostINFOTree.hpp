@@ -15,7 +15,7 @@ parseCompositeFromBoostInfoFile(std::string filePath, Args &&...args) {
   if (auto result = parser.parse(jsonView); !result) {
     return std::unexpected(result.error());
   }
-  return parser.getDispatcher().getComposite();
+  return parser.getDispatcher().moveComposite();
 }
 
 } // namespace moped

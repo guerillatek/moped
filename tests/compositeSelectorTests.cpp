@@ -1,5 +1,5 @@
 #include "moped/JSONStreamParser.hpp"
-#include "moped/MappedCompositeSelector.hpp"
+#include "moped/ParsingPivotMember.hpp"
 #include "moped/MappedObjectParseEncoderDispatcher.hpp"
 #include "moped/ScaledInteger.hpp"
 

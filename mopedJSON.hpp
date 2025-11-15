@@ -15,7 +15,7 @@ parseCompositeFromJSONStream(TFT, std::istream &jsonStream, Args &&...args) {
   if (auto result = parser.parseInputStream(jsonStream); !result) {
     return std::unexpected(result.error());
   }
-  return parser.getDispatcher().getComposite();
+  return parser.getDispatcher().moveComposite();
 }
 
 template <typename CompositeT, typename TFT, typename... Args>
@@ -38,7 +38,7 @@ parseCompositeFromJSONView(TFT, std::string_view jsonView, Args &&...args) {
   if (auto result = parser.parse(jsonView); !result) {
     return std::unexpected(result.error());
   }
-  return parser.getDispatcher().getComposite();
+  return parser.getDispatcher().moveComposite();
 }
 
 } // namespace moped

@@ -52,7 +52,7 @@ constexpr auto getTargetSetVariantFromParams() {
 }
 
 template <auto key_select_value, typename T, auto... Args>
-class CompositeSelectorValue {
+class ParsingPivotMember {
 
   using SelectableTypesLookup =
       decltype(selectableTypeTuple<key_select_value, T, Args...>());
@@ -62,10 +62,10 @@ public:
   using TargetSetVariantT =
       decltype(getTargetSetVariantFromParams<key_select_value, T, Args...>());
 
-  CompositeSelectorValue(TargetSetVariantT &memberVariant)
+  ParsingPivotMember(TargetSetVariantT &memberVariant)
       : _targetSetVariant{memberVariant} {}
 
-  CompositeSelectorValue &operator=(const SelectorValueT &value) {
+  ParsingPivotMember &operator=(const SelectorValueT &value) {
     _selectorValue = value;
     return *this;
   }
@@ -75,7 +75,7 @@ public:
   }
 
   friend std::ostream &operator<<(std::ostream &os,
-                                  const CompositeSelectorValue &csv) {
+                                  const ParsingPivotMember &csv) {
     if (!csv._selectorValue.has_value()) {
       return os;
     }
