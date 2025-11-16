@@ -58,6 +58,9 @@ std::expected<TargetT, std::string> getValueFor(std::string_view value) {
     return result.value();
   } else if constexpr (is_scaled_int<TargetT>) {
     return TargetT{value};
+  } else {
+    return std::unexpected("Unsupported type for value conversion: " +
+                           std::string(typeid(TargetT).name()));
   }
 }
 
@@ -83,6 +86,12 @@ struct ValueHandlerBase<T, MemberIdTraits> {
 
   ValueTypeHandlerT _valueTypeHandler{
       getMOPEDHandlerForParser<T, MemberIdTraits>()};
+};
+
+template <IsMOPEDContentCollectionC T, MemberIdTraitsC MemberIdTraits>
+struct ValueHandlerBase<T, MemberIdTraits> {
+  using ValueTypeHandlerT = Handler<T, MemberIdTraits>;
+  ValueTypeHandlerT _valueTypeHandler{};
 };
 
 template <IsMOPEDPushCollectionC MemberT, MemberIdTraitsC MemberIdTraits>
@@ -118,6 +127,21 @@ struct Handler<MemberT, MemberIdTraits>
   }
 
   Expected onArrayStart(MOPEDHandlerStack &handlerStack) override {
+    if (handlerStack.empty()) {
+      return std::unexpected("Parse error!!! onArrayStart event not expected"
+                             " in collection handler");
+    }
+    if (handlerStack.top() == this) {
+      if constexpr (is_array<ValueType> || IsMOPEDPushCollectionC<ValueType>) {
+        this->_valueTypeHandler.setTargetMember(
+            _targetCollection->emplace_back());
+        return this->_valueTypeHandler.onArrayStart(handlerStack);
+      } else {
+        return std::unexpected(
+            "Parse error!!! onArrayStart event not expected in collection "
+            "with non collection value types");
+      }
+    }
     handlerStack.push(this);
     return {};
   }
@@ -183,41 +207,74 @@ struct Handler<MemberT, MemberIdTraits>
       IsMOPEDCompositeC<typename MemberT::value_type, MemberIdTraits>;
   using MOPEDHandlerStack = std::stack<IMOPEDHandler<MemberIdTraits> *>;
 
-  Expected onMember(MOPEDHandlerStack &eventHandlerStack,
-                    MemberIdType memberId) override {
+  Expected onMember(MOPEDHandlerStack &, MemberIdType) override {
     return std::unexpected("Parse error!!! onObjectFinish event not expected"
                            " in dispatching handler");
   }
 
   Expected onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
-    _dispatcher->dispatcherLastCapture();
-    this->_valueTypeHandler.setTargetMember(_dispatcher->resetCapture());
-    return this->_valueTypeHandler.onObjectStart(eventHandlerStack);
+    if (_currentIndex > 0) {
+      _dispatcher->dispatchLastCapture();
+    }
+
+    if constexpr (HasCompositeValueType) {
+      this->_valueTypeHandler.setTargetMember(_dispatcher->resetCapture());
+      _currentIndex++;
+      return this->_valueTypeHandler.onObjectStart(eventHandlerStack);
+    }
+    return {};
   }
 
-  Expected onObjectFinish(MOPEDHandlerStack &handlerStack) override {
+  Expected onObjectFinish(MOPEDHandlerStack &) override {
     return std::unexpected("Parse error!!! onObjectFinish event not expected"
                            " in dispatching handler");
   }
 
   Expected onArrayStart(MOPEDHandlerStack &handlerStack) override {
+    if (handlerStack.empty()) {
+      return std::unexpected("Parse error!!! onArrayStart event not expected"
+                             " in collection dispatch handler");
+    }
+    if (handlerStack.top() == this) {
+      if (_currentIndex > 0) {
+        _dispatcher->dispatchLastCapture();
+      }
+      if constexpr (is_array<ValueType> || IsMOPEDPushCollectionC<ValueType>) {
+        this->_valueTypeHandler.setTargetMember(_dispatcher->resetCapture());
+        ++_currentIndex;
+        return this->_valueTypeHandler.onArrayStart(handlerStack);
+      } else {
+        return std::unexpected(
+            "Parse error!!! onArrayStart event not expected in collection "
+            "with non collection value types");
+      }
+    }
     handlerStack.push(this);
     return {};
   }
 
   Expected onArrayFinish(MOPEDHandlerStack &handlerStack) override {
-    _dispatcher->dispatcherLastCapture();
+    _dispatcher->dispatchLastCapture();
     handlerStack.pop();
+    _currentIndex = 0;
     return {};
   }
 
   Expected onStringValue(std::string_view value) override {
+    if (_currentIndex > 0) {
+      _dispatcher->dispatchLastCapture();
+    }
     HandleScalarValue(value);
+    _currentIndex++;
     return {};
   }
 
   Expected onNumericValue(std::string_view value) override {
+    if (_currentIndex > 0) {
+      _dispatcher->dispatchLastCapture();
+    }
     HandleScalarValue(value);
+    _currentIndex++;
     return {};
   }
 
@@ -240,10 +297,12 @@ private:
         return std::unexpected(result.error());
       }
       _dispatcher->setCurrentValue(result.value());
-      _dispatcher->dispatcherLastCapture();
+      _dispatcher->dispatchLastCapture();
     }
     return {};
   }
+
+  size_t _currentIndex{0};
 
   MemberT *_dispatcher;
 };
@@ -261,8 +320,7 @@ struct Handler<MemberT, MemberIdTraits>
   using MemberIdT = typename MemberIdTraits::MemberIdType;
   using MOPEDHandlerStack = std::stack<IMOPEDHandler<MemberIdTraits> *>;
 
-  Expected onMember(MOPEDHandlerStack &eventHandlerStack,
-                    MemberIdT memberId) override {
+  Expected onMember(MOPEDHandlerStack &, MemberIdT) override {
     return std::unexpected("Parse error!!! onMember event not expected in "
                            "array handler");
   }
@@ -270,31 +328,45 @@ struct Handler<MemberT, MemberIdTraits>
   Expected onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
 
     if constexpr (HasCompositeValueType) {
-      if (_currentIndex >= std::size(_targetArray)) {
+      if (_currentIndex >= std::size(*_targetArray)) {
         return std::unexpected("Index out of bounds");
       }
 
-      this->_valueTypeHandler.setTargetMember(_targetArray[_currentIndex]);
-      auto result = this->_valueTypeHandler.onObjectStart(eventHandlerStack);
-      if (!result) {
-        return result;
-      }
+      this->_valueTypeHandler.setTargetMember(*_targetArray[_currentIndex++]);
+      return this->_valueTypeHandler.onObjectStart(eventHandlerStack);
     } else {
       return std::unexpected(
           "Parse error!!! onObjectStart event not expected in array "
-          "with scalar value types");
+          "with non composite value types");
     }
-    ++_currentIndex;
   }
 
-  virtual Expected onObjectFinish(MOPEDHandlerStack &handlerStack) {
+  virtual Expected onObjectFinish(MOPEDHandlerStack &) {
     return std::unexpected(
         "Parse error!!! onObjectFinish event not expected for array handler");
   }
 
   virtual Expected onArrayStart(MOPEDHandlerStack &handlerStack) {
-    handlerStack.push(this);
+    if (handlerStack.empty()) {
+      return std::unexpected("Parse error!!! onArrayStart event not expected"
+                             " in array handler");
+    }
+    if (handlerStack.top() == this) {
+      if constexpr (is_array<ValueType> || IsMOPEDPushCollectionC<ValueType>) {
+        if (_currentIndex >= sizeof(*_targetArray)) {
+          return std::unexpected("Index out of bounds");
+        }
+
+        this->_valueTypeHandler.setTargetMember(*_targetArray[_currentIndex++]);
+        return this->_valueTypeHandler.onArrayStart(handlerStack);
+      } else {
+        return std::unexpected(
+            "Parse error!!! onArrayStart event not expected in array "
+            "with non collection value types");
+      }
+    }
     _currentIndex = 0;
+    handlerStack.push(this);
     return {};
   }
 
@@ -304,27 +376,27 @@ struct Handler<MemberT, MemberIdTraits>
   }
 
   Expected onStringValue(std::string_view value) override {
-    if (_currentIndex >= std::size(_targetArray)) {
+    if (_currentIndex >= sizeof(*_targetArray)) {
       return std::unexpected("Index out of bounds");
     }
     auto result = getValueFor<ValueType, MemberIdTraits>(value);
     if (!result) {
       return std::unexpected(result.error());
     }
-    _targetArray[_currentIndex] = result.value();
+    (*_targetArray)[_currentIndex] = result.value();
     ++_currentIndex;
     return {};
   }
 
   Expected onNumericValue(std::string_view value) override {
-    if (_currentIndex >= std::size(_targetArray)) {
+    if (_currentIndex >= sizeof(*_targetArray)) {
       return std::unexpected("Index out of bounds");
     }
-    auto result = getValueFor<MemberT, MemberIdTraits>(value);
+    auto result = getValueFor<ValueType, MemberIdTraits>(value);
     if (!result) {
       return std::unexpected(result.error());
     }
-    _targetArray[_currentIndex] = result.value();
+    (*_targetArray)[_currentIndex] = result.value();
     ++_currentIndex;
     return {};
   }
@@ -333,7 +405,7 @@ struct Handler<MemberT, MemberIdTraits>
 
   void applyEmitterContext(auto &emitterContext,
                            std::optional<MemberIdT> memberId) {
-    emitterContext.onArrayStart(memberId, _targetArray->size());
+    emitterContext.onArrayStart(memberId, sizeof(*_targetArray));
 
     for (auto &item : *_targetArray) {
       if constexpr (HasCompositeValueType) {
@@ -624,7 +696,7 @@ struct MemberIdHandlerPair {
 
   auto &getMember(CaptureT &getTarget) { return getTarget.*memberPtr; }
 
-  Handler<MemberT, MemberIdTraits> handler;
+  Handler<MemberT, MemberIdTraits> handler{};
 };
 
 template <typename CaptureType, typename MemberEventHandlerTuple,
@@ -656,8 +728,8 @@ struct MappedObjectParserEncoderDispatcher : IMOPEDHandler<MemberIdTraits> {
 
   Expected onArrayStart(MOPEDHandlerStack &eventHandlerStack) override {
     if (!_activeMemberOffset.has_value()) {
-      eventHandlerStack.push(this);
-      return {};
+      return std::unexpected("Parse error!!! onArrayStart event not expected "
+                             "in object handler with a preceding member event");
     }
 
     return dispatchForActiveMember<0>([&eventHandlerStack](auto &handler) {
@@ -686,7 +758,7 @@ struct MappedObjectParserEncoderDispatcher : IMOPEDHandler<MemberIdTraits> {
     _captureObject = &targetMember;
   }
 
-  Expected onArrayFinish(MOPEDHandlerStack &handlerStack) { return {}; }
+  Expected onArrayFinish(MOPEDHandlerStack &) { return {}; }
 
   template <size_t MemberIndex = 0>
   void applyEmitterContext(auto &emitterContext,
@@ -710,6 +782,7 @@ struct MappedObjectParserEncoderDispatcher : IMOPEDHandler<MemberIdTraits> {
   }
 
 private:
+  std::string_view _activeMemberName;
   template <size_t MemberIndex>
   Expected setActiveMember(MemberIdT memberId,
                            MOPEDHandlerStack &eventHandlerStack) {
@@ -799,8 +872,6 @@ constexpr auto mopedTuple() {
 template <MemberIdTraitsC MemberIdTraits, typename CaptureT, typename... Args>
 constexpr auto mopedTuple(std::string_view name, auto memberPtr,
                           Args &&...args) {
-  using MemberIdT = typename MemberIdTraits::MemberIdType;
-
   using MemberPtrT = decltype(memberPtr);
   auto handlerTuple =
       std::make_tuple(MemberIdHandlerPair<CaptureT, MemberPtrT, MemberIdTraits>{
@@ -811,7 +882,6 @@ constexpr auto mopedTuple(std::string_view name, auto memberPtr,
 
 template <MemberIdTraitsC MemberIdTraits, typename CaptureT, typename... Args>
 auto mopedHandler(Args &&...args) {
-  using MemberIdT = typename MemberIdTraits::MemberIdType;
   auto handlerTuple =
       mopedTuple<MemberIdTraits, CaptureT>(std::forward<Args>(args)...);
   using HandlerTupleT = decltype(handlerTuple);

@@ -28,7 +28,7 @@ public:
 
   void setCurrentValue(const ValueT &value) { _captureValue = value; }
 
-  void dispatcherLastCapture() {
+  void dispatchLastCapture() {
     if (!_captureValue.has_value()) {
       return;
     }

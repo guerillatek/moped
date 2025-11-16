@@ -50,40 +50,39 @@ template <MemberIdTraitsC MemberIdTraits> struct IMOPEDHandler {
 
   virtual ~IMOPEDHandler() = default;
 
-  virtual Expected onMember(MOPEDHandlerStack &handlerStack,
-                            MemberIdT memberId) {
+  virtual Expected onMember(MOPEDHandlerStack &, MemberIdT) {
     return std::unexpected("Unhandled member event");
   }
 
-  virtual Expected onObjectStart(MOPEDHandlerStack &handlerStack) {
+  virtual Expected onObjectStart(MOPEDHandlerStack &) {
     return std::unexpected("Unhandled object start event");
   }
 
-  virtual Expected onObjectFinish(MOPEDHandlerStack &handlerStack) {
+  virtual Expected onObjectFinish(MOPEDHandlerStack &) {
     return std::unexpected("Unhandled object finish event");
   }
 
-  virtual Expected onArrayStart(MOPEDHandlerStack &handlerStack) {
+  virtual Expected onArrayStart(MOPEDHandlerStack &) {
     return std::unexpected("Unhandled array start event");
   }
 
-  virtual Expected onArrayFinish(MOPEDHandlerStack &handlerStack) {
+  virtual Expected onArrayFinish(MOPEDHandlerStack &) {
     return std::unexpected("Unhandled array finish event");
   }
 
-  virtual Expected onStringValue(std::string_view value) {
+  virtual Expected onStringValue(std::string_view) {
     return std::unexpected("Unhandled string value event");
   }
 
-  virtual Expected onNumericValue(std::string_view value) {
+  virtual Expected onNumericValue(std::string_view) {
     return std::unexpected("Unhandled numeric value event");
   }
 
-  virtual Expected onBooleanValue(bool value) {
+  virtual Expected onBooleanValue(bool) {
     return std::unexpected("Unhandled boolean value event");
   }
 
-  virtual Expected onRawBinary(void *value) {
+  virtual Expected onRawBinary(void *) {
     return std::unexpected("Unhandled binary value event");
   }
 };
@@ -165,7 +164,7 @@ concept IsMOPEDPushCollectionC = requires(T t) {
 template <typename T>
 concept IsMOPEDCompositeDispatcherC = requires(T t) {
   { t.setCurrentValue(std::declval<const typename T::value_type &>()) };
-  { t.dispatcherLastCapture() };
+  { t.dispatchLastCapture() };
   { t.resetCapture() } -> std::same_as<typename T::value_type &>;
 };
 
@@ -176,12 +175,25 @@ concept IsMOPEDMapCollectionC = requires(T t) {
   } -> std::same_as<typename T::mapped_type &>;
 };
 
-template <typename T>
-concept IsMOPEDContentCollectionC =
-    IsMOPEDPushCollectionC<T> || std::is_array_v<T>;
+
+template <typename T> struct is_std_array : std::false_type {};
+
+template <typename T, std::size_t N>
+struct is_std_array<std::array<T, N>> : std::true_type {};
 
 template <typename T>
-concept is_array = std::is_array_v<T>;
+inline constexpr bool is_std_array_v =
+    is_std_array<std::remove_cvref_t<T>>::value;
+
+template <typename T>
+concept is_array = std::is_array_v<T> || is_std_array_v<T>;
+
+
+template <typename T>
+concept IsMOPEDContentCollectionC =
+    IsMOPEDPushCollectionC<T> || is_array<T>;
+
+
 
 template <typename T, typename MemberIdTraits>
 concept IsOptionalC = requires(T t) {

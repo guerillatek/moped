@@ -25,8 +25,6 @@ template <MemberIdTraitsC MemberIdTraits, typename T> struct LastHarness {
   void applyParseEvent(auto &&parseEvent, int &activeParticipants,
                        std::vector<std::string> &errors) {
     if (!_participating) {
-      _tailingCandidates.applyParseEvent(parseEvent, activeParticipants,
-                                         errors);
       return;
     }
     auto result = parseEvent(_candidateMopedHandler);
@@ -49,11 +47,11 @@ template <MemberIdTraitsC MemberIdTraits, typename T> struct LastHarness {
 };
 
 template <MemberIdTraitsC MemberIdTraits, typename T, typename... TailTypes>
-struct CandidateTypeHarness {
+struct CandidateTypeHarness<MemberIdTraits, T, TailTypes...> {
   using MOPEDHandlerT = CompositeParserEventDispatcher<T, MemberIdTraits>;
 
   using TailingCandidateHarness =
-      std::conditional_t<(sizeof(TailTypes) > 0),
+      std::conditional_t<(sizeof...(TailTypes) == 0),
                          CandidateTypeHarness<MemberIdTraits, TailTypes...>,
                          LastHarness<MemberIdTraits, T>>;
   T _candidateComposite;
@@ -64,7 +62,7 @@ struct CandidateTypeHarness {
   template <typename... Args>
   CandidateTypeHarness(Args &&...args)
       : _candidateMopedHandler{std::forward<Args>(args)...},
-        _tailingCandidates{std::forward<Args>(args)...}, {}
+        _tailingCandidates{std::forward<Args>(args)...} {}
 
   template <typename... Args> void reset(Args &&...args) {
     _participating = true;
@@ -101,8 +99,10 @@ struct CandidateTypeHarness {
 
 template <MemberIdTraitsC MemberIdTraits, typename... CompositeTypes>
 struct AutoTypeSelectingParserHandler {
-  using CandidateHarness =
-      decltype(getCandidateHarness<MemberIdTraits, CompositeTypes...>());
+  using CandidateHarness = std::conditional_t<
+      (sizeof...(CompositeTypes) > 1),
+      CandidateTypeHarness<MemberIdTraits, CompositeTypes...>,
+      LastHarness<MemberIdTraits, CompositeTypes...>>;
 
   using MOPEDHandlerStack = std::stack<IMOPEDHandler<MemberIdTraits> *>;
 
@@ -206,7 +206,7 @@ public:
     return {};
   }
 
-  template <typename... Args> void reset() {
+  template <typename... Args> void reset(Args &&...args) {
     _candidateHarness.reset(std::forward<Args>(args)...);
   }
 

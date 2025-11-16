@@ -90,7 +90,9 @@ TEST_CASE("Instrument Data load Test with streaming parser and  "
               [&capturedSymbols](const Symbol &sym) {
                 capturedSymbols.push_back(sym);
               }});
-  REQUIRE(result);
+  if (!result) {
+    FAIL(result.error().c_str());
+  }
   const ExchangeInfoWithSymbolDispatch &info = result.value();
 
   // Check first symbol

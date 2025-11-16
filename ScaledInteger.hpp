@@ -3,10 +3,7 @@
 #include "scaledIntParseUtils.hpp"
 #include <format>
 
-namespace moped {
-
-
-} // namespace moped
+namespace moped {} // namespace moped
 
 template <moped::is_scaled_int T> struct std::formatter<T> {
 
@@ -15,7 +12,7 @@ template <moped::is_scaled_int T> struct std::formatter<T> {
   auto format(const T &scaledInt, auto &ctx) const {
     char buffer[20];
     moped::scaledIntToString(scaledInt.getRawIntegerValue(), T::Scale, buffer);
-    return std::format_to(ctx.out(), "{}",buffer);
+    return std::format_to(ctx.out(), "{}", buffer);
   }
 };
 
@@ -28,7 +25,7 @@ public:
   static constexpr auto Scale = Scale10V;
   static constexpr auto Divisor = scale10(Scale);
 
-
+  ScaledInteger() : _rawIntegerValue{0} {}
   ScaledInteger(std::string_view input)
       : _rawIntegerValue{parseToScaledInt<I>(input, Scale)} {}
 
@@ -74,21 +71,21 @@ public:
   }
 
   ScaledInteger operator*(const ScaledInteger &rhs) const {
-      return ScaledInteger{_rawIntegerValue * rhs.getRawIntegerValue()/scale10(Scale)};
+    return ScaledInteger{_rawIntegerValue * rhs.getRawIntegerValue() /
+                         scale10(Scale)};
   }
 
   ScaledInteger operator/(const ScaledInteger &rhs) const {
     // Avoids potential divide by zero errors
-    return ScaledInteger{_rawIntegerValue * scale10(Scale) / rhs.getRawIntegerValue()};
-
+    return ScaledInteger{_rawIntegerValue * scale10(Scale) /
+                         rhs.getRawIntegerValue()};
   }
 
-
-friend std::ostream &operator<<(std::ostream &os,
+  friend std::ostream &operator<<(std::ostream &os,
                                   const ScaledInteger &scaledInt) {
     char buffer[20];
     scaledIntToString(scaledInt._rawIntegerValue, Scale, buffer);
-    return os << std::string_view{static_cast<const char*>(buffer)};
+    return os << std::string_view{static_cast<const char *>(buffer)};
   }
 
   friend std::string to_string(const ScaledInteger &scaledInt) {
