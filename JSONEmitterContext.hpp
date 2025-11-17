@@ -119,7 +119,7 @@ void encodeToJSONStream(const T &mopedObject, std::ostream &output,
                         FormatArgs... args) {
   JSONEmitterContext<FormatArgs...> context(output);
   auto handler =
-      getMOPEDHandlerForParser<T, StringMemberIdTraits<FormatArgs...>>();
+      getMOPEDHandlerForParser<T, StringDecodingTraits<FormatArgs...>>();
   handler.setTargetMember(const_cast<T &>(mopedObject));
   handler.applyEmitterContext(context);
 }

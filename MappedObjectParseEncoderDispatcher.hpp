@@ -27,7 +27,7 @@ inline std::expected<NumericT, std::string> ston(std::string_view value) {
   return result;
 }
 
-template <typename TargetT, typename MemberIdTraits>
+template <typename TargetT, typename DecodingTraits>
 std::expected<TargetT, std::string> getValueFor(std::string_view value) {
   if constexpr (std::is_same_v<TargetT, bool>) {
     if (value == "true" || value == "1") {
@@ -38,7 +38,7 @@ std::expected<TargetT, std::string> getValueFor(std::string_view value) {
       return std::unexpected("Invalid boolean value: " + std::string{value});
     }
   } else if constexpr (std::is_same_v<TargetT, TimePoint>) {
-    auto epochTime = MemberIdTraits::TimePointFormaterT::getTimeValue(value);
+    auto epochTime = DecodingTraits::TimePointFormaterT::getTimeValue(value);
     if (!epochTime) {
       throw std::runtime_error(epochTime.error());
     }
@@ -49,9 +49,9 @@ std::expected<TargetT, std::string> getValueFor(std::string_view value) {
   } else if constexpr ((std::is_integral_v<TargetT>) ||
                        (std::is_floating_point_v<TargetT>)) {
     return ston<TargetT>(value);
-  } else if constexpr (IsOptionalC<TargetT, MemberIdTraits>) {
+  } else if constexpr (IsOptionalC<TargetT, DecodingTraits>) {
     auto result =
-        getValueFor<typename TargetT::value_type, MemberIdTraits>(value);
+        getValueFor<typename TargetT::value_type, DecodingTraits>(value);
     if (!result) {
       return std::unexpected(result.error());
     }
@@ -64,47 +64,47 @@ std::expected<TargetT, std::string> getValueFor(std::string_view value) {
   }
 }
 
-template <typename TargetT, typename MemberIdTraits>
+template <typename TargetT, typename DecodingTraits>
 std::expected<bool, std::string> getValueFor(bool value) {
   return value;
 }
 
-template <typename MemberT, MemberIdTraitsC MemberIdTraits> struct Handler {
+template <typename MemberT, DecodingTraitsC DecodingTraits> struct Handler {
   using MemberType = MemberT;
-  using MemberIdType = typename MemberIdTraits::MemberIdType;
+  using MemberIdType = typename DecodingTraits::MemberIdType;
 };
 
-template <typename T, MemberIdTraitsC MemberIdTraits>
+template <typename T, DecodingTraitsC DecodingTraits>
 struct ValueHandlerBase {};
 
-template <typename T, MemberIdTraitsC MemberIdTraits>
-  requires(IsMOPEDCompositeC<T, MemberIdTraits>)
-struct ValueHandlerBase<T, MemberIdTraits> {
+template <typename T, DecodingTraitsC DecodingTraits>
+  requires(IsMOPEDCompositeC<T, DecodingTraits>)
+struct ValueHandlerBase<T, DecodingTraits> {
 
   using ValueTypeHandlerT =
-      std::decay_t<decltype(T::template getMOPEDHandler<MemberIdTraits>())>;
+      std::decay_t<decltype(T::template getMOPEDHandler<DecodingTraits>())>;
 
   ValueTypeHandlerT _valueTypeHandler{
-      getMOPEDHandlerForParser<T, MemberIdTraits>()};
+      getMOPEDHandlerForParser<T, DecodingTraits>()};
 };
 
-template <IsMOPEDContentCollectionC T, MemberIdTraitsC MemberIdTraits>
-struct ValueHandlerBase<T, MemberIdTraits> {
-  using ValueTypeHandlerT = Handler<T, MemberIdTraits>;
+template <IsMOPEDContentCollectionC T, DecodingTraitsC DecodingTraits>
+struct ValueHandlerBase<T, DecodingTraits> {
+  using ValueTypeHandlerT = Handler<T, DecodingTraits>;
   ValueTypeHandlerT _valueTypeHandler{};
 };
 
-template <IsMOPEDPushCollectionC MemberT, MemberIdTraitsC MemberIdTraits>
-struct Handler<MemberT, MemberIdTraits>
-    : IMOPEDHandler<MemberIdTraits>,
-      ValueHandlerBase<typename MemberT::value_type, MemberIdTraits> {
-  using MemberIdType = typename MemberIdTraits::MemberIdType;
+template <IsMOPEDPushCollectionC MemberT, DecodingTraitsC DecodingTraits>
+struct Handler<MemberT, DecodingTraits>
+    : IMOPEDHandler<DecodingTraits>,
+      ValueHandlerBase<typename MemberT::value_type, DecodingTraits> {
+  using MemberIdType = typename DecodingTraits::MemberIdType;
 
   using MemberType = MemberT;
   using ValueType = typename MemberT::value_type;
   static constexpr bool HasCompositeValueType =
-      IsMOPEDCompositeC<typename MemberT::value_type, MemberIdTraits>;
-  using MOPEDHandlerStack = std::stack<IMOPEDHandler<MemberIdTraits> *>;
+      IsMOPEDCompositeC<typename MemberT::value_type, DecodingTraits>;
+  using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
 
   Expected onMember(MOPEDHandlerStack &eventHandlerStack,
                     MemberIdType memberId) override {
@@ -183,7 +183,7 @@ private:
       return std::unexpected(
           "Parse error!!! No active composite handler to set value");
     } else {
-      auto result = getValueFor<ValueType, MemberIdTraits>(value);
+      auto result = getValueFor<ValueType, DecodingTraits>(value);
       if (!result) {
         return std::unexpected(result.error());
       }
@@ -195,17 +195,17 @@ private:
   MemberT *_targetCollection;
 };
 
-template <IsMOPEDCompositeDispatcherC MemberT, MemberIdTraitsC MemberIdTraits>
-struct Handler<MemberT, MemberIdTraits>
-    : IMOPEDHandler<MemberIdTraits>,
-      ValueHandlerBase<typename MemberT::value_type, MemberIdTraits> {
-  using MemberIdType = typename MemberIdTraits::MemberIdType;
+template <IsMOPEDCompositeDispatcherC MemberT, DecodingTraitsC DecodingTraits>
+struct Handler<MemberT, DecodingTraits>
+    : IMOPEDHandler<DecodingTraits>,
+      ValueHandlerBase<typename MemberT::value_type, DecodingTraits> {
+  using MemberIdType = typename DecodingTraits::MemberIdType;
 
   using MemberType = MemberT;
   using ValueType = typename MemberT::value_type;
   static constexpr bool HasCompositeValueType =
-      IsMOPEDCompositeC<typename MemberT::value_type, MemberIdTraits>;
-  using MOPEDHandlerStack = std::stack<IMOPEDHandler<MemberIdTraits> *>;
+      IsMOPEDCompositeC<typename MemberT::value_type, DecodingTraits>;
+  using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
 
   Expected onMember(MOPEDHandlerStack &, MemberIdType) override {
     return std::unexpected("Parse error!!! onObjectFinish event not expected"
@@ -292,7 +292,7 @@ private:
       return std::unexpected(
           "Parse error!!! No active composite handler to set value");
     } else {
-      auto result = getValueFor<ValueType, MemberIdTraits>(value);
+      auto result = getValueFor<ValueType, DecodingTraits>(value);
       if (!result) {
         return std::unexpected(result.error());
       }
@@ -307,18 +307,18 @@ private:
   MemberT *_dispatcher;
 };
 
-template <is_array MemberT, MemberIdTraitsC MemberIdTraits>
-struct Handler<MemberT, MemberIdTraits>
-    : IMOPEDHandler<MemberIdTraits>,
-      ValueHandlerBase<typename MemberT::value_type, MemberIdTraits> {
+template <is_array MemberT, DecodingTraitsC DecodingTraits>
+struct Handler<MemberT, DecodingTraits>
+    : IMOPEDHandler<DecodingTraits>,
+      ValueHandlerBase<typename MemberT::value_type, DecodingTraits> {
 
   using MemberType = MemberT;
   using ValueType = typename MemberT::value_type;
   static constexpr bool HasCompositeValueType =
-      IsMOPEDCompositeC<typename MemberT::value_type, MemberIdTraits>;
+      IsMOPEDCompositeC<typename MemberT::value_type, DecodingTraits>;
 
-  using MemberIdT = typename MemberIdTraits::MemberIdType;
-  using MOPEDHandlerStack = std::stack<IMOPEDHandler<MemberIdTraits> *>;
+  using MemberIdT = typename DecodingTraits::MemberIdType;
+  using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
 
   Expected onMember(MOPEDHandlerStack &, MemberIdT) override {
     return std::unexpected("Parse error!!! onMember event not expected in "
@@ -379,7 +379,7 @@ struct Handler<MemberT, MemberIdTraits>
     if (_currentIndex >= sizeof(*_targetArray)) {
       return std::unexpected("Index out of bounds");
     }
-    auto result = getValueFor<ValueType, MemberIdTraits>(value);
+    auto result = getValueFor<ValueType, DecodingTraits>(value);
     if (!result) {
       return std::unexpected(result.error());
     }
@@ -392,7 +392,7 @@ struct Handler<MemberT, MemberIdTraits>
     if (_currentIndex >= sizeof(*_targetArray)) {
       return std::unexpected("Index out of bounds");
     }
-    auto result = getValueFor<ValueType, MemberIdTraits>(value);
+    auto result = getValueFor<ValueType, DecodingTraits>(value);
     if (!result) {
       return std::unexpected(result.error());
     }
@@ -425,7 +425,7 @@ private:
       return std::unexpected(
           "Parse error!!! No active composite handler to set value");
     } else {
-      auto result = getValueFor<ValueType, MemberIdTraits>(value);
+      auto result = getValueFor<ValueType, DecodingTraits>(value);
       if (!result) {
         return std::unexpected(result.error());
       }
@@ -439,18 +439,18 @@ private:
   size_t _currentIndex = 0;
 };
 
-template <IsMOPEDMapCollectionC MemberT, MemberIdTraitsC MemberIdTraits>
-struct Handler<MemberT, MemberIdTraits>
-    : IMOPEDHandler<MemberIdTraits>,
-      ValueHandlerBase<typename MemberT::mapped_type, MemberIdTraits> {
-  using MemberIdType = typename MemberIdTraits::MemberIdType;
+template <IsMOPEDMapCollectionC MemberT, DecodingTraitsC DecodingTraits>
+struct Handler<MemberT, DecodingTraits>
+    : IMOPEDHandler<DecodingTraits>,
+      ValueHandlerBase<typename MemberT::mapped_type, DecodingTraits> {
+  using MemberIdType = typename DecodingTraits::MemberIdType;
 
   using MemberType = MemberT;
   using KeyType = typename MemberT::key_type;
   using MappedType = typename MemberT::value_type;
   static constexpr bool HasCompositeMappedType =
-      IsMOPEDCompositeC<typename MemberT::mapped_type, MemberIdTraits>;
-  using MOPEDHandlerStack = std::stack<IMOPEDHandler<MemberIdTraits> *>;
+      IsMOPEDCompositeC<typename MemberT::mapped_type, DecodingTraits>;
+  using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
 
   Expected onMember(MOPEDHandlerStack &eventHandlerStack,
                     MemberIdType memberId) override {
@@ -525,7 +525,7 @@ private:
       return std::unexpected(
           "Parse error!!! No active composite handler to set value");
     } else {
-      auto result = getValueFor<MappedType, MemberIdTraits>(value);
+      auto result = getValueFor<MappedType, DecodingTraits>(value);
       if (!result) {
         return std::unexpected(result.error());
       }
@@ -539,39 +539,39 @@ private:
   bool _addingContent{false};
 };
 
-template <typename MemberT, MemberIdTraitsC MemberIdTraits>
-  requires(IsOptionalC<MemberT, MemberIdTraits>)
-struct Handler<MemberT, MemberIdTraits>
-    : Handler<typename MemberT::value_type, MemberIdTraits> {
+template <typename MemberT, DecodingTraitsC DecodingTraits>
+  requires(IsOptionalC<MemberT, DecodingTraits>)
+struct Handler<MemberT, DecodingTraits>
+    : Handler<typename MemberT::value_type, DecodingTraits> {
 
   using MemberType = MemberT;
-  using MemberIdT = typename MemberIdTraits::MemberIdType;
+  using MemberIdT = typename DecodingTraits::MemberIdType;
 
   void setTargetMember(MemberT &targetMember) {
     targetMember = MemberT{};
-    Handler<typename MemberT::value_type, MemberIdTraits>::setTargetMember(
+    Handler<typename MemberT::value_type, DecodingTraits>::setTargetMember(
         targetMember.value());
   }
 };
 
-template <typename MemberT, MemberIdTraitsC MemberIdTraits>
-  requires(IsMOPEDCompositeC<MemberT, MemberIdTraits>)
-struct Handler<MemberT, MemberIdTraits>
+template <typename MemberT, DecodingTraitsC DecodingTraits>
+  requires(IsMOPEDCompositeC<MemberT, DecodingTraits>)
+struct Handler<MemberT, DecodingTraits>
     : std::decay_t<
-          decltype(getMOPEDHandlerForParser<MemberT, MemberIdTraits>())> {
+          decltype(getMOPEDHandlerForParser<MemberT, DecodingTraits>())> {
   using HandlerBase = std::decay_t<
-      decltype(getMOPEDHandlerForParser<MemberT, MemberIdTraits>())>;
+      decltype(getMOPEDHandlerForParser<MemberT, DecodingTraits>())>;
   using MemberType = MemberT;
-  using MemberIdT = typename MemberIdTraits::MemberIdType;
+  using MemberIdT = typename DecodingTraits::MemberIdType;
 
   Handler()
-      : HandlerBase(MemberT::template getMOPEDHandler<MemberIdTraits>()) {}
+      : HandlerBase(MemberT::template getMOPEDHandler<DecodingTraits>()) {}
 };
 
-template <MemberIdTraitsC MemberIdTraits, typename T>
+template <DecodingTraitsC DecodingTraits, typename T>
 struct FinalMultiMopedHandlerHarness {
   using HandlerT =
-      std::decay_t<decltype(getMOPEDHandlerForParser<MemberIdTraits, T>())>;
+      std::decay_t<decltype(getMOPEDHandlerForParser<DecodingTraits, T>())>;
   HandlerT handler;
   template <typename TargetType> auto &getHandlerForType() {
     if constexpr (std::is_same_v<TargetType, T>) {
@@ -582,24 +582,24 @@ struct FinalMultiMopedHandlerHarness {
   }
 };
 
-template <MemberIdTraitsC MemberIdTraits, typename T, typename... MOPEDTypes>
+template <DecodingTraitsC DecodingTraits, typename T, typename... MOPEDTypes>
 struct MultiMopedHandlerHarness;
 
-template <MemberIdTraitsC MemberIdTraits, typename T, typename... MOPEDTypes>
+template <DecodingTraitsC DecodingTraits, typename T, typename... MOPEDTypes>
 constexpr auto getMultiMopedHandlerHarness() {
   if constexpr (sizeof...(MOPEDTypes) == 1) {
-    return FinalMultiMopedHandlerHarness<MemberIdTraits, T>{};
+    return FinalMultiMopedHandlerHarness<DecodingTraits, T>{};
   } else {
-    return MultiMopedHandlerHarness<MemberIdTraits, T, MOPEDTypes...>{};
+    return MultiMopedHandlerHarness<DecodingTraits, T, MOPEDTypes...>{};
   }
 };
 
-template <MemberIdTraitsC MemberIdTraits, typename T, typename... MOPEDTypes>
+template <DecodingTraitsC DecodingTraits, typename T, typename... MOPEDTypes>
 struct MultiMopedHandlerHarness {
   using HandlerT =
-      std::decay_t<decltype(getMOPEDHandlerForParser<MemberIdTraits, T>())>;
+      std::decay_t<decltype(getMOPEDHandlerForParser<DecodingTraits, T>())>;
   using TailHandlersT = std::decay_t<
-      decltype(getMultiMopedHandlerHarness<MemberIdTraits, MOPEDTypes...>())>;
+      decltype(getMultiMopedHandlerHarness<DecodingTraits, MOPEDTypes...>())>;
   HandlerT handler;
   TailHandlersT tailHandlers;
 
@@ -612,22 +612,22 @@ struct MultiMopedHandlerHarness {
   }
 };
 
-template <MemberIdTraitsC MemberIdTraits, typename... MOPEDTypes>
+template <DecodingTraitsC DecodingTraits, typename... MOPEDTypes>
 constexpr auto
 getMultiMopedHandlerHarnessFromVariant(std::variant<MOPEDTypes...>) {
-  return getMultiMopedHandlerHarness<MemberIdTraits, MOPEDTypes...>();
+  return getMultiMopedHandlerHarness<DecodingTraits, MOPEDTypes...>();
 };
 
-template <is_variant VariantT, MemberIdTraitsC MemberIdTraits>
-struct Handler<VariantT, MemberIdTraits> : IMOPEDHandler<MemberIdTraits> {
+template <is_variant VariantT, DecodingTraitsC DecodingTraits>
+struct Handler<VariantT, DecodingTraits> : IMOPEDHandler<DecodingTraits> {
 
   using MemberType = VariantT;
-  using MemberIdT = typename MemberIdTraits::MemberIdType;
+  using MemberIdT = typename DecodingTraits::MemberIdType;
   using MultiMopedHandlerHarness =
       std::decay_t<decltype(getMultiMopedHandlerHarnessFromVariant<
-                            MemberIdTraits>(VariantT{}))>;
+                            DecodingTraits>(VariantT{}))>;
 
-  using MOPEDHandlerStack = std::stack<IMOPEDHandler<MemberIdTraits> *>;
+  using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
   Expected onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
     return std::visit(
         [this, &eventHandlerStack](auto &selected) {
@@ -662,20 +662,20 @@ private:
 };
 
 template <typename CaptureT, typename MemberPtrT,
-          MemberIdTraitsC MemberIdTraits>
+          DecodingTraitsC DecodingTraits>
 struct MemberIdHandlerPair {
-  using MemberIdT = typename MemberIdTraits::MemberIdType;
+  using MemberIdT = typename DecodingTraits::MemberIdType;
   MemberIdT memberId;
   MemberPtrT memberPtr;
   using MemberT = std::decay_t<decltype(std::declval<CaptureT>().*
                                         std::declval<MemberPtrT>())>;
 
   Expected setValue(CaptureT &setTarget, auto value) {
-    if constexpr (IsSettableC<MemberT, MemberIdTraits> && requires() {
+    if constexpr (IsSettableC<MemberT, DecodingTraits> && requires() {
                     setTarget.*memberPtr =
-                        getValueFor<MemberT, MemberIdTraits>(value).value();
+                        getValueFor<MemberT, DecodingTraits>(value).value();
                   }) {
-      auto result = getValueFor<MemberT, MemberIdTraits>(value);
+      auto result = getValueFor<MemberT, DecodingTraits>(value);
       if (!result) {
         return std::unexpected(result.error());
       }
@@ -686,7 +686,7 @@ struct MemberIdHandlerPair {
 
   void applyEmitterContext(auto &emitterContext, CaptureT &captureTarget) {
     auto &memberValue = captureTarget.*memberPtr;
-    if constexpr (IMOPEDHandlerC<decltype(handler), MemberIdTraits>) {
+    if constexpr (IMOPEDHandlerC<decltype(handler), DecodingTraits>) {
       handler.setTargetMember(memberValue);
       handler.applyEmitterContext(emitterContext, memberId);
     } else {
@@ -696,15 +696,15 @@ struct MemberIdHandlerPair {
 
   auto &getMember(CaptureT &getTarget) { return getTarget.*memberPtr; }
 
-  Handler<MemberT, MemberIdTraits> handler{};
+  Handler<MemberT, DecodingTraits> handler{};
 };
 
 template <typename CaptureType, typename MemberEventHandlerTuple,
-          MemberIdTraitsC MemberIdTraits>
-struct MappedObjectParserEncoderDispatcher : IMOPEDHandler<MemberIdTraits> {
+          DecodingTraitsC DecodingTraits>
+struct MappedObjectParserEncoderDispatcher : IMOPEDHandler<DecodingTraits> {
 
-  using MOPEDHandlerStack = std::stack<IMOPEDHandler<MemberIdTraits> *>;
-  using MemberIdT = typename MemberIdTraits::MemberIdType;
+  using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
+  using MemberIdT = typename DecodingTraits::MemberIdType;
 
   MappedObjectParserEncoderDispatcher(MemberEventHandlerTuple &&handlerTuple)
       : _handlerTuple{std::move(handlerTuple)} {}
@@ -794,10 +794,10 @@ private:
       if (nameHandler.memberId == memberId) {
         _activeMemberOffset = MemberIndex;
         return {};
-      } else if (nameHandler.memberId == MemberIdTraits::EmbeddingMemberId) {
+      } else if (nameHandler.memberId == DecodingTraits::EmbeddingMemberId) {
         if constexpr (IMOPEDHandlerC<
                           std::decay_t<decltype(nameHandler.handler)>,
-                          MemberIdTraits>) {
+                          DecodingTraits>) {
           // If we haven't found the target member before the embedding member,
           // we need to set the embedding handler as the active handler and hand
           // off the current event to it.
@@ -847,7 +847,7 @@ private:
       }
       auto &nameHandler = std::get<MemberIndex>(_handlerTuple);
       if constexpr (IMOPEDHandlerC<std::decay_t<decltype(nameHandler.handler)>,
-                                   MemberIdTraits>) {
+                                   DecodingTraits>) {
         if (MemberIndex == *_activeMemberOffset) {
           nameHandler.handler.setTargetMember(
               _captureObject->*(nameHandler.memberPtr));
@@ -864,29 +864,29 @@ private:
   std::optional<std::uint32_t> _activeMemberOffset;
 };
 
-template <MemberIdTraitsC MemberIdTraits, typename CaptureT>
+template <DecodingTraitsC DecodingTraits, typename CaptureT>
 constexpr auto mopedTuple() {
   return std::tuple<>{};
 }
 
-template <MemberIdTraitsC MemberIdTraits, typename CaptureT, typename... Args>
+template <DecodingTraitsC DecodingTraits, typename CaptureT, typename... Args>
 constexpr auto mopedTuple(std::string_view name, auto memberPtr,
                           Args &&...args) {
   using MemberPtrT = decltype(memberPtr);
   auto handlerTuple =
-      std::make_tuple(MemberIdHandlerPair<CaptureT, MemberPtrT, MemberIdTraits>{
-          MemberIdTraits::getMemberId(name), memberPtr});
-  return std::tuple_cat(handlerTuple, mopedTuple<MemberIdTraits, CaptureT>(
+      std::make_tuple(MemberIdHandlerPair<CaptureT, MemberPtrT, DecodingTraits>{
+          DecodingTraits::getMemberId(name), memberPtr});
+  return std::tuple_cat(handlerTuple, mopedTuple<DecodingTraits, CaptureT>(
                                           std::forward<Args>(args)...));
 }
 
-template <MemberIdTraitsC MemberIdTraits, typename CaptureT, typename... Args>
+template <DecodingTraitsC DecodingTraits, typename CaptureT, typename... Args>
 auto mopedHandler(Args &&...args) {
   auto handlerTuple =
-      mopedTuple<MemberIdTraits, CaptureT>(std::forward<Args>(args)...);
+      mopedTuple<DecodingTraits, CaptureT>(std::forward<Args>(args)...);
   using HandlerTupleT = decltype(handlerTuple);
   return MappedObjectParserEncoderDispatcher<CaptureT, HandlerTupleT,
-                                             MemberIdTraits>{
+                                             DecodingTraits>{
       std::move(handlerTuple)};
 }
 

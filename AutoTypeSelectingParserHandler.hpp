@@ -1,19 +1,24 @@
+#pragma once
+
 #include "moped/concepts.hpp"
 #include "moped/moped.hpp"
+#include "JSONStreamParser.hpp"
+#include "JSONViewParser.hpp"
+
 #include <type_traits>
 
 namespace moped {
 
-template <MemberIdTraitsC MemberIdTraits, typename... T>
+template <DecodingTraitsC DecodingTraits, typename... T>
 struct CandidateTypeHarness {};
 
-template <MemberIdTraitsC MemberIdTraits, typename T> struct LastHarness {
+template <DecodingTraitsC DecodingTraits, typename T> struct LastHarness {
 
   template <typename... Args>
   LastHarness(Args &&...args)
       : _candidateMopedHandler{std::forward<Args>(args)...} {}
 
-  using MOPEDHandlerT = CompositeParserEventDispatcher<T, MemberIdTraits>;
+  using MOPEDHandlerT = CompositeParserEventDispatcher<T, DecodingTraits>;
   MOPEDHandlerT _candidateMopedHandler;
   bool _participating = true;
 
@@ -38,22 +43,37 @@ template <MemberIdTraitsC MemberIdTraits, typename T> struct LastHarness {
     }
   }
 
+  inline Expected applyParseEvent(auto &&parseEvent) {
+    if (!_participating) {
+      return std::unexpected("No active candidate type at the moment");
+    }
+    return parseEvent(_candidateMopedHandler);
+  }
+
   auto applyTypeHandler(auto &&handlerFunc) {
     if (!_participating) {
       return std::unexpected("No active candidate type at the moment");
     }
     return handlerFunc(_candidateMopedHandler.getComposite());
   }
+
+  template <typename SetT> void setActiveComposite() {
+    if constexpr (std::is_same_v<SetT, T>) {
+      _participating = true;
+    } else {
+      _participating = false;
+    }
+  }
 };
 
-template <MemberIdTraitsC MemberIdTraits, typename T, typename... TailTypes>
-struct CandidateTypeHarness<MemberIdTraits, T, TailTypes...> {
-  using MOPEDHandlerT = CompositeParserEventDispatcher<T, MemberIdTraits>;
+template <DecodingTraitsC DecodingTraits, typename T, typename... TailTypes>
+struct CandidateTypeHarness<DecodingTraits, T, TailTypes...> {
+  using MOPEDHandlerT = CompositeParserEventDispatcher<T, DecodingTraits>;
 
   using TailingCandidateHarness =
       std::conditional_t<(sizeof...(TailTypes) == 0),
-                         CandidateTypeHarness<MemberIdTraits, TailTypes...>,
-                         LastHarness<MemberIdTraits, T>>;
+                         CandidateTypeHarness<DecodingTraits, TailTypes...>,
+                         LastHarness<DecodingTraits, T>>;
   T _candidateComposite;
   MOPEDHandlerT _candidateMopedHandler;
   TailingCandidateHarness _tailingCandidates;
@@ -68,6 +88,15 @@ struct CandidateTypeHarness<MemberIdTraits, T, TailTypes...> {
     _participating = true;
     _candidateMopedHandler.reset(std::forward<Args>(args)...);
     _tailingCandidates.reset(std::forward<Args>(args)...);
+  }
+
+  template <typename SetT> void setActiveComposite() {
+    if constexpr (std::is_same_v<SetT, T>) {
+      _participating = true;
+    } else {
+      _participating = false;
+    }
+    _tailingCandidates.template setActiveComposite<SetT>();
   }
 
   void applyParseEvent(auto &&parseEvent, int &activeParticipants,
@@ -89,6 +118,13 @@ struct CandidateTypeHarness<MemberIdTraits, T, TailTypes...> {
     _tailingCandidates.applyParseEvent(parseEvent, activeParticipants, errors);
   }
 
+  inline Expected applyParseEvent(auto &&parseEvent) {
+    if (_participating) {
+      return parseEvent(_candidateMopedHandler);
+    }
+    return _tailingCandidates.applyParseEvent(parseEvent);
+  }
+
   auto applyTypeHandler(auto &&handlerFunc) {
     if (!_participating) {
       return _tailingCandidates.applyTypeHandler(handlerFunc);
@@ -97,14 +133,14 @@ struct CandidateTypeHarness<MemberIdTraits, T, TailTypes...> {
   }
 };
 
-template <MemberIdTraitsC MemberIdTraits, typename... CompositeTypes>
+template <DecodingTraitsC DecodingTraits, typename... CompositeTypes>
 struct AutoTypeSelectingParserHandler {
   using CandidateHarness = std::conditional_t<
       (sizeof...(CompositeTypes) > 1),
-      CandidateTypeHarness<MemberIdTraits, CompositeTypes...>,
-      LastHarness<MemberIdTraits, CompositeTypes...>>;
+      CandidateTypeHarness<DecodingTraits, CompositeTypes...>,
+      LastHarness<DecodingTraits, CompositeTypes...>>;
 
-  using MOPEDHandlerStack = std::stack<IMOPEDHandler<MemberIdTraits> *>;
+  using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
 
 public:
   template <typename... Args>
@@ -214,5 +250,6 @@ private:
   std::vector<std::string> _errors;
   CandidateHarness _candidateHarness;
 };
+
 
 } // namespace moped

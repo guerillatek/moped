@@ -16,9 +16,9 @@ struct RateLimit {
   int limit;
 
   // moped serialization
-  template <moped::MemberIdTraitsC MemberIdTraits>
+  template <moped::DecodingTraitsC DecodingTraits>
   static auto getMOPEDHandler() {
-    return moped::mopedHandler<MemberIdTraits, RateLimit>(
+    return moped::mopedHandler<DecodingTraits, RateLimit>(
         "rateLimitType", &RateLimit::rateLimitType, "interval",
         &RateLimit::interval, "intervalNum", &RateLimit::intervalNum, "limit",
         &RateLimit::limit);
@@ -54,9 +54,9 @@ struct Filter {
   std::optional<int> maxNumOrders;
   std::optional<int> maxNumAlgoOrders;
 
-  template <moped::MemberIdTraitsC MemberIdTraits>
+  template <moped::DecodingTraitsC DecodingTraits>
   static auto getMOPEDHandler() {
-    return moped::mopedHandler<MemberIdTraits, Filter>(
+    return moped::mopedHandler<DecodingTraits, Filter>(
         "filterType", &Filter::filterType, "minPrice", &Filter::minPrice,
         "maxPrice", &Filter::maxPrice, "tickSize", &Filter::tickSize, "minQty",
         &Filter::minQty, "maxQty", &Filter::maxQty, "stepSize",
@@ -103,9 +103,9 @@ struct Symbol {
   std::string_view defaultSelfTradePreventionMode;
   std::vector<std::string_view> allowedSelfTradePreventionModes;
 
-  template <moped::MemberIdTraitsC MemberIdTraits>
+  template <moped::DecodingTraitsC DecodingTraits>
   static auto getMOPEDHandler() {
-    return moped::mopedHandler<MemberIdTraits, Symbol>(
+    return moped::mopedHandler<DecodingTraits, Symbol>(
         "symbol", &Symbol::symbol, "status", &Symbol::status, "baseAsset",
         &Symbol::baseAsset, "baseAssetPrecision", &Symbol::baseAssetPrecision,
         "quoteAsset", &Symbol::quoteAsset, "quotePrecision",
@@ -136,9 +136,9 @@ struct ExchangeInfo {
   std::vector<std::string> exchangeFilters;
   std::vector<Symbol> symbols;
 
-  template <moped::MemberIdTraitsC MemberIdTraits>
+  template <moped::DecodingTraitsC DecodingTraits>
   static auto getMOPEDHandler() {
-    return moped::mopedHandler<MemberIdTraits, ExchangeInfo>(
+    return moped::mopedHandler<DecodingTraits, ExchangeInfo>(
         "timezone", &ExchangeInfo::timezone, "serverTime",
         &ExchangeInfo::serverTime, "rateLimits", &ExchangeInfo::rateLimits,
         "exchangeFilters", &ExchangeInfo::exchangeFilters, "symbols",
@@ -157,9 +157,9 @@ struct RateLimit {
   int limit;
 
   // moped serialization
-  template <moped::MemberIdTraitsC MemberIdTraits>
+  template <moped::DecodingTraitsC DecodingTraits>
   static auto getMOPEDHandler() {
-    return moped::mopedHandler<MemberIdTraits, RateLimit>(
+    return moped::mopedHandler<DecodingTraits, RateLimit>(
         "rateLimitType", &RateLimit::rateLimitType, "interval",
         &RateLimit::interval, "intervalNum", &RateLimit::intervalNum, "limit",
         &RateLimit::limit);
@@ -195,9 +195,9 @@ struct Filter {
   std::optional<int> maxNumOrders;
   std::optional<int> maxNumAlgoOrders;
 
-  template <moped::MemberIdTraitsC MemberIdTraits>
+  template <moped::DecodingTraitsC DecodingTraits>
   static auto getMOPEDHandler() {
-    return moped::mopedHandler<MemberIdTraits, Filter>(
+    return moped::mopedHandler<DecodingTraits, Filter>(
         "filterType", &Filter::filterType, "minPrice", &Filter::minPrice,
         "maxPrice", &Filter::maxPrice, "tickSize", &Filter::tickSize, "minQty",
         &Filter::minQty, "maxQty", &Filter::maxQty, "stepSize",
@@ -244,9 +244,9 @@ struct Symbol {
   std::string defaultSelfTradePreventionMode;
   std::vector<std::string> allowedSelfTradePreventionModes;
 
-  template <moped::MemberIdTraitsC MemberIdTraits>
+  template <moped::DecodingTraitsC DecodingTraits>
   static auto getMOPEDHandler() {
-    return moped::mopedHandler<MemberIdTraits, Symbol>(
+    return moped::mopedHandler<DecodingTraits, Symbol>(
         "symbol", &Symbol::symbol, "status", &Symbol::status, "baseAsset",
         &Symbol::baseAsset, "baseAssetPrecision", &Symbol::baseAssetPrecision,
         "quoteAsset", &Symbol::quoteAsset, "quotePrecision",
@@ -277,9 +277,9 @@ struct ExchangeInfo {
   std::vector<std::string> exchangeFilters;
   std::vector<Symbol> symbols;
 
-  template <moped::MemberIdTraitsC MemberIdTraits>
+  template <moped::DecodingTraitsC DecodingTraits>
   static auto getMOPEDHandler() {
-    return moped::mopedHandler<MemberIdTraits, ExchangeInfo>(
+    return moped::mopedHandler<DecodingTraits, ExchangeInfo>(
         "timezone", &ExchangeInfo::timezone, "serverTime",
         &ExchangeInfo::serverTime, "rateLimits", &ExchangeInfo::rateLimits,
         "exchangeFilters", &ExchangeInfo::exchangeFilters, "symbols",
@@ -300,9 +300,9 @@ struct ExchangeInfoWithSymbolDispatch {
   ExchangeInfoWithSymbolDispatch()
       : symbols([](const Symbol &) {}) {} // Default constructor
 
-  template <moped::MemberIdTraitsC MemberIdTraits>
+  template <moped::DecodingTraitsC DecodingTraits>
   static auto getMOPEDHandler() {
-    return moped::mopedHandler<MemberIdTraits, ExchangeInfoWithSymbolDispatch>(
+    return moped::mopedHandler<DecodingTraits, ExchangeInfoWithSymbolDispatch>(
         "timezone", &ExchangeInfoWithSymbolDispatch::timezone, "serverTime",
         &ExchangeInfoWithSymbolDispatch::serverTime, "rateLimits",
         &ExchangeInfoWithSymbolDispatch::rateLimits, "exchangeFilters",

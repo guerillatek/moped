@@ -14,9 +14,9 @@ struct Endpoint {
   int port;
   std::string uri;
 
-  template <moped::MemberIdTraitsC MemberIdTraits>
+  template <moped::DecodingTraitsC DecodingTraits>
   static auto getMOPEDHandler() {
-    return moped::mopedHandler<MemberIdTraits, Endpoint>(
+    return moped::mopedHandler<DecodingTraits, Endpoint>(
         "name", &Endpoint::name, "host", &Endpoint::host, "port",
         &Endpoint::port, "uri", &Endpoint::uri);
   }
@@ -28,9 +28,9 @@ struct BookUpdateSettings {
   bool arbTrades;
   bool removeRestingOrders;
 
-  template <moped::MemberIdTraitsC MemberIdTraits>
+  template <moped::DecodingTraitsC DecodingTraits>
   static auto getMOPEDHandler() {
-    return moped::mopedHandler<MemberIdTraits, BookUpdateSettings>(
+    return moped::mopedHandler<DecodingTraits, BookUpdateSettings>(
         "levels", &BookUpdateSettings::levels, "arbTrades",
         &BookUpdateSettings::arbTrades, "removeRestingOrders",
         &BookUpdateSettings::removeRestingOrders);
@@ -64,9 +64,9 @@ struct Subscription {
   SubscriptionFlagsT subscribeFlags;
   BookUpdateSettings bookUpdateSettings;
 
-  template <moped::MemberIdTraitsC MemberIdTraits>
+  template <moped::DecodingTraitsC DecodingTraits>
   static auto getMOPEDHandler() {
-    return moped::mopedHandler<MemberIdTraits, Subscription>(
+    return moped::mopedHandler<DecodingTraits, Subscription>(
         "id", &Subscription::id, "subscribeFlags",
         &Subscription::subscribeFlags, "bookUpdateSettings",
         &Subscription::bookUpdateSettings);
@@ -86,9 +86,9 @@ struct Session {
   Endpoint snapshotEndpoint;
   Endpoint instrumentDataEndpoint;
 
-  template <moped::MemberIdTraitsC MemberIdTraits>
+  template <moped::DecodingTraitsC DecodingTraits>
   static auto getMOPEDHandler() {
-    return moped::mopedHandler<MemberIdTraits, Session>(
+    return moped::mopedHandler<DecodingTraits, Session>(
         "enabled", &Session::enabled, "venue", &Session::venue, "runContext",
         &Session::runContext, "serviceContext", &Session::serviceContext,
         "maxRequestPerSecond", &Session::maxRequestPerSecond,
@@ -104,9 +104,9 @@ struct Session {
 struct Sessions {
   std::map<std::string, Session> sessions;
 
-  template <moped::MemberIdTraitsC MemberIdTraits>
+  template <moped::DecodingTraitsC DecodingTraits>
   static auto getMOPEDHandler() {
-    return moped::mopedHandler<MemberIdTraits, Sessions>("sessions",
+    return moped::mopedHandler<DecodingTraits, Sessions>("sessions",
                                                          &Sessions::sessions);
   }
 };
@@ -115,9 +115,9 @@ struct Sessions {
 struct MarketDataService {
   std::map<std::string, Session> sessions;
 
-  template <moped::MemberIdTraitsC MemberIdTraits>
+  template <moped::DecodingTraitsC DecodingTraits>
   static auto getMOPEDHandler() {
-    return moped::mopedHandler<MemberIdTraits, MarketDataService>(
+    return moped::mopedHandler<DecodingTraits, MarketDataService>(
         "sessions", &MarketDataService::sessions);
   }
 };
@@ -126,9 +126,9 @@ struct MarketDataService {
 struct MDConfig {
   MarketDataService marketDataService;
 
-  template <moped::MemberIdTraitsC MemberIdTraits>
+  template <moped::DecodingTraitsC DecodingTraits>
   static auto getMOPEDHandler() {
-    return moped::mopedHandler<MemberIdTraits, MDConfig>(
+    return moped::mopedHandler<DecodingTraits, MDConfig>(
         "MarketDataService", &MDConfig::marketDataService);
   }
 };

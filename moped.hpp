@@ -8,17 +8,17 @@ namespace moped {
 
 using Expected = std::expected<void, std::string>;
 
-template <typename CompositeT, MemberIdTraitsC MemberIdTraits>
-  requires IsMOPEDCompositeC<CompositeT, MemberIdTraits>
+template <typename CompositeT, DecodingTraitsC DecodingTraits>
+  requires IsMOPEDCompositeC<CompositeT, DecodingTraits>
 struct CompositeParserEventDispatcher {
   using CompositeMOPEDHandler = std::decay_t<
-      decltype(getMOPEDHandlerForParser<CompositeT, MemberIdTraits>())>;
-  using MOPEDHandlerStack = std::stack<IMOPEDHandler<MemberIdTraits> *>;
+      decltype(getMOPEDHandlerForParser<CompositeT, DecodingTraits>())>;
+  using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
 
   template <typename... Args>
   CompositeParserEventDispatcher(Args &&...args)
       : _compositeMOPEDHandler{getMOPEDHandlerForParser<CompositeT,
-                                                        MemberIdTraits>()},
+                                                        DecodingTraits>()},
         _composite{std::forward<Args>(args)...} {
     _compositeMOPEDHandler.setTargetMember(_composite);
   }
@@ -74,7 +74,7 @@ private:
 };
 
 template <typename TimePointFormatter = DurationSinceEpochFormatter<>>
-struct StringMemberIdTraits {
+struct StringDecodingTraits {
   using MemberIdType = std::string_view;
   static MemberIdType getMemberId(std::string_view name) { return name; }
   static std::string getDisplayName(MemberIdType memberId) {
@@ -84,7 +84,7 @@ struct StringMemberIdTraits {
   using TimePointFormaterT = TimePointFormatter;
 };
 
-static_assert(MemberIdTraitsC<StringMemberIdTraits<>>,
-              "StringMemberIdTraits should satisfy MemberIdTraitsC concept");
+static_assert(DecodingTraitsC<StringDecodingTraits<>>,
+              "StringDecodingTraits should satisfy DecodingTraitsC concept");
 
 } // namespace moped

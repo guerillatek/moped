@@ -6,11 +6,11 @@
 namespace moped {
 
 template <typename CompositeT, typename TFT, typename... Args>
-  requires IsMOPEDCompositeC<CompositeT, StringMemberIdTraits<TFT>>
+  requires IsMOPEDCompositeC<CompositeT, StringDecodingTraits<TFT>>
 std::expected<CompositeT, std::string>
 parseCompositeFromJSONStream(TFT, std::istream &jsonStream, Args &&...args) {
   using DispatcherT =
-      CompositeParserEventDispatcher<CompositeT, StringMemberIdTraits<TFT>>;
+      CompositeParserEventDispatcher<CompositeT, StringDecodingTraits<TFT>>;
   JSONStreamParser<DispatcherT> parser{std::forward<Args>(args)...};
   if (auto result = parser.parseInputStream(jsonStream); !result) {
     return std::unexpected(result.error());
@@ -19,7 +19,7 @@ parseCompositeFromJSONStream(TFT, std::istream &jsonStream, Args &&...args) {
 }
 
 template <typename CompositeT, typename TFT, typename... Args>
-  requires IsMOPEDCompositeC<CompositeT, StringMemberIdTraits<TFT>>
+  requires IsMOPEDCompositeC<CompositeT, StringDecodingTraits<TFT>>
 std::expected<CompositeT, std::string>
 parseCompositeFromJSONStream(TFT, std::string_view jsonText, Args &&...args) {
   std::stringstream ss{std::string{jsonText}};
@@ -28,11 +28,11 @@ parseCompositeFromJSONStream(TFT, std::string_view jsonText, Args &&...args) {
 }
 
 template <typename CompositeT, typename TFT, typename... Args>
-  requires IsMOPEDCompositeC<CompositeT, StringMemberIdTraits<TFT>>
+  requires IsMOPEDCompositeC<CompositeT, StringDecodingTraits<TFT>>
 std::expected<CompositeT, std::string>
 parseCompositeFromJSONView(TFT, std::string_view jsonView, Args &&...args) {
   using DispatcherT =
-      CompositeParserEventDispatcher<CompositeT, StringMemberIdTraits<TFT>>;
+      CompositeParserEventDispatcher<CompositeT, StringDecodingTraits<TFT>>;
   DispatcherT dispatcher{std::forward<Args>(args)...};
   JSONViewParser<DispatcherT> parser{std::forward<Args>(args)...};
   if (auto result = parser.parse(jsonView); !result) {

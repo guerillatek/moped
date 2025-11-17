@@ -17,7 +17,7 @@ using Expected = std::expected<void, std::string>;
 using TimePoint = std::chrono::system_clock::time_point;
 
 template <typename T>
-concept MemberIdTraitsC = requires(T t) {
+concept DecodingTraitsC = requires(T t) {
   {
     T::getMemberId(std::string_view{})
   } -> std::same_as<typename T::MemberIdType>;
@@ -44,9 +44,9 @@ concept IParserEventDispatchC = requires(T t) {
   { t.onNumericValue(std::string_view{}) } -> std::same_as<Expected>;
 };
 
-template <MemberIdTraitsC MemberIdTraits> struct IMOPEDHandler {
+template <DecodingTraitsC DecodingTraits> struct IMOPEDHandler {
   using MOPEDHandlerStack = std::stack<IMOPEDHandler *>;
-  using MemberIdT = typename MemberIdTraits::MemberIdType;
+  using MemberIdT = typename DecodingTraits::MemberIdType;
 
   virtual ~IMOPEDHandler() = default;
 
@@ -87,8 +87,8 @@ template <MemberIdTraitsC MemberIdTraits> struct IMOPEDHandler {
   }
 };
 
-template <typename T, typename MemberIdTraits>
-concept IMOPEDHandlerC = std::derived_from<T, IMOPEDHandler<MemberIdTraits>>;
+template <typename T, typename DecodingTraits>
+concept IMOPEDHandlerC = std::derived_from<T, IMOPEDHandler<DecodingTraits>>;
 
 template <typename T>
 concept is_scaled_int = requires(T t) {
@@ -127,34 +127,34 @@ concept IsMOPEDValueC =
     std::is_same_v<T, TimePoint> || std::is_integral_v<T> ||
     std::is_floating_point_v<T> || is_scaled_int<T> || is_mapped_enum<T>;
 
-template <typename T, typename MemberIdTraits>
+template <typename T, typename DecodingTraits>
 concept HasEmbeddedHandler =
-    IMOPEDHandlerC<decltype(T::template getMOPEDHandler<MemberIdTraits>()),
-                   MemberIdTraits>;
+    IMOPEDHandlerC<decltype(T::template getMOPEDHandler<DecodingTraits>()),
+                   DecodingTraits>;
 
-template <typename T, typename MemberIdTraits> void getMOPEDHandler() {}
+template <typename T, typename DecodingTraits> void getMOPEDHandler() {}
 
-template <typename T, moped::MemberIdTraitsC MemberIdTraits>
+template <typename T, moped::DecodingTraitsC DecodingTraits>
 static auto getMOPEDHandlerForParser() {
-  if constexpr (HasEmbeddedHandler<T, MemberIdTraits>) {
-    return T::template getMOPEDHandler<MemberIdTraits>();
+  if constexpr (HasEmbeddedHandler<T, DecodingTraits>) {
+    return T::template getMOPEDHandler<DecodingTraits>();
   } else {
-    return getMOPEDHandler<T, MemberIdTraits>();
+    return getMOPEDHandler<T, DecodingTraits>();
   }
 }
 
 template <typename T>
 concept NotVoidResult = !std::is_void_v<T>;
 
-template <typename T, typename MemberIdTraits>
+template <typename T, typename DecodingTraits>
 concept IsMOPEDCompositeC = requires() {
-  { getMOPEDHandlerForParser<T, MemberIdTraits>() } -> NotVoidResult;
+  { getMOPEDHandlerForParser<T, DecodingTraits>() } -> NotVoidResult;
 };
 
-template <typename T, typename MemberIdTraits>
+template <typename T, typename DecodingTraits>
 concept IsMOPEDContentC =
-    IMOPEDHandlerC<T, MemberIdTraits> || IsMOPEDValueC<T> ||
-    IsMOPEDCompositeC<T, MemberIdTraits>;
+    IMOPEDHandlerC<T, DecodingTraits> || IsMOPEDValueC<T> ||
+    IsMOPEDCompositeC<T, DecodingTraits>;
 
 template <typename T>
 concept IsMOPEDPushCollectionC = requires(T t) {
@@ -195,28 +195,28 @@ concept IsMOPEDContentCollectionC =
 
 
 
-template <typename T, typename MemberIdTraits>
+template <typename T, typename DecodingTraits>
 concept IsOptionalC = requires(T t) {
   { t.has_value() } -> std::same_as<bool>;
   { t.value() } -> std::same_as<typename T::value_type &>;
-} && IsMOPEDContentC<typename T::value_type, MemberIdTraits>;
+} && IsMOPEDContentC<typename T::value_type, DecodingTraits>;
 
-template <typename T, typename MemberIdTraits>
+template <typename T, typename DecodingTraits>
 concept IsMOPEDTypeC =
-    IsMOPEDContentC<T, MemberIdTraits> || IsMOPEDContentCollectionC<T> ||
-    IsOptionalC<T, MemberIdTraits> || IsMOPEDCompositeDispatcherC<T>;
+    IsMOPEDContentC<T, DecodingTraits> || IsMOPEDContentCollectionC<T> ||
+    IsOptionalC<T, DecodingTraits> || IsMOPEDCompositeDispatcherC<T>;
 
 template <typename T>
 concept IsSettableVariantC = ISettableVariant(T{});
 
-template <typename T, typename MemberIdTraits>
+template <typename T, typename DecodingTraits>
 concept IsSettableC =
     IsMOPEDValueC<T> ||
-    (IsOptionalC<T, MemberIdTraits> && IsMOPEDValueC<typename T::value_type>);
+    (IsOptionalC<T, DecodingTraits> && IsMOPEDValueC<typename T::value_type>);
 
-template <typename T, typename MemberIdTraits>
+template <typename T, typename DecodingTraits>
 concept IsCompositeCollectionC =
     IsMOPEDPushCollectionC<T> &&
-    IsMOPEDCompositeC<typename T::value_type, MemberIdTraits>;
+    IsMOPEDCompositeC<typename T::value_type, DecodingTraits>;
 
 } // namespace moped

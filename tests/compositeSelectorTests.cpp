@@ -28,9 +28,9 @@ struct LastTradeEventT {
                               // optional
   // Constructor to handle non-JSON fields
 
-  template <moped::MemberIdTraitsC MemberIdTraits>
+  template <moped::DecodingTraitsC DecodingTraits>
   static auto getMOPEDHandler() {
-    return moped::mopedHandler<MemberIdTraits, LastTradeEventT>(
+    return moped::mopedHandler<DecodingTraits, LastTradeEventT>(
         "e", &LastTradeEventT::eventType,          // Event type
         "E", &LastTradeEventT::eventTime,          // Event time
         "s", &LastTradeEventT::securityId,         // Symbol
