@@ -60,8 +60,10 @@ struct CompositeParserEventDispatcher {
   auto &getComposite() { return _composite; }
 
   template <typename... Args> void reset(Args &&...args) {
-    _composite = CompositeT{
-        std::forward<Args>(args)...}; // Reset composite with new args
+    _compositeMOPEDHandler.reset();
+    std::destroy_at(&_composite);
+    std::construct_at(&_composite,
+                      std::forward<Args>(args)...); // Reconstruct with new args
     while (!_mopedHandlerStack.empty()) {
       _mopedHandlerStack.pop();
     }
@@ -73,9 +75,11 @@ private:
   MOPEDHandlerStack _mopedHandlerStack;
 };
 
-template <typename TimePointFormatter = DurationSinceEpochFormatter<>>
+template <typename TimePointFormatter = DurationSinceEpochFormatter<>,
+          typename PivotValueType = std::string_view>
 struct StringDecodingTraits {
   using MemberIdType = std::string_view;
+  using PivotValueT = PivotValueType;
   static MemberIdType getMemberId(std::string_view name) { return name; }
   static std::string getDisplayName(MemberIdType memberId) {
     return std::string{memberId};

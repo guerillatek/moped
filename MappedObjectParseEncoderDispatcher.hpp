@@ -46,6 +46,8 @@ std::expected<TargetT, std::string> getValueFor(std::string_view value) {
   } else if constexpr (std::is_same_v<TargetT, std::string> ||
                        std::is_same_v<TargetT, std::string_view>) {
     return TargetT{value};
+  } else if constexpr (std::is_same_v<TargetT, const char *>) {
+    return value.data();
   } else if constexpr ((std::is_integral_v<TargetT>) ||
                        (std::is_floating_point_v<TargetT>)) {
     return ston<TargetT>(value);
@@ -756,7 +758,10 @@ struct MappedObjectParserEncoderDispatcher : IMOPEDHandler<DecodingTraits> {
 
   void setTargetMember(CaptureType &targetMember) {
     _captureObject = &targetMember;
+    _activeMemberOffset.reset();
   }
+
+  void reset() { _activeMemberOffset.reset(); }
 
   Expected onArrayFinish(MOPEDHandlerStack &) { return {}; }
 
@@ -787,6 +792,8 @@ private:
   Expected setActiveMember(MemberIdT memberId,
                            MOPEDHandlerStack &eventHandlerStack) {
     if constexpr (MemberIndex == std::tuple_size_v<MemberEventHandlerTuple>) {
+      // Failed parse ... no member found
+      _activeMemberOffset.reset();
       return std::unexpected(
           std::format("Member, '{}' not found in MOPED handler", memberId));
     } else {

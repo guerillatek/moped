@@ -24,6 +24,7 @@ public:
     return *_captureValue;
   }
 
+  CollectionFunctionDispatcher() = default;
   CollectionFunctionDispatcher(auto &&handler) : _handler(std::move(handler)) {}
 
   void setCurrentValue(const ValueT &value) { _captureValue = value; }
@@ -40,7 +41,7 @@ public:
 
 private:
   std::optional<ValueT> _captureValue{};
-  HandlerT _handler;
+  HandlerT _handler{};
 };
 
 } // namespace moped

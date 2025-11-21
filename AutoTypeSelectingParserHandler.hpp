@@ -1,9 +1,9 @@
 #pragma once
 
-#include "moped/concepts.hpp"
-#include "moped/moped.hpp"
 #include "JSONStreamParser.hpp"
 #include "JSONViewParser.hpp"
+#include "moped/concepts.hpp"
+#include "moped/moped.hpp"
 
 #include <type_traits>
 
@@ -19,6 +19,7 @@ template <DecodingTraitsC DecodingTraits, typename T> struct LastHarness {
       : _candidateMopedHandler{std::forward<Args>(args)...} {}
 
   using MOPEDHandlerT = CompositeParserEventDispatcher<T, DecodingTraits>;
+  using DecodingTraitsT = DecodingTraits;
   MOPEDHandlerT _candidateMopedHandler;
   bool _participating = true;
 
@@ -27,10 +28,10 @@ template <DecodingTraitsC DecodingTraits, typename T> struct LastHarness {
     _candidateMopedHandler.reset(std::forward<Args>(args)...);
   }
 
-  void applyParseEvent(auto &&parseEvent, int &activeParticipants,
-                       std::vector<std::string> &errors) {
+  Expected applyParseEvent(auto &&parseEvent, int &activeParticipants,
+                           std::vector<std::string> &errors) {
     if (!_participating) {
-      return;
+      return std::unexpected("No active parse candidate type at the moment");
     }
     auto result = parseEvent(_candidateMopedHandler);
     if (!result) {
@@ -41,6 +42,7 @@ template <DecodingTraitsC DecodingTraits, typename T> struct LastHarness {
     } else {
       activeParticipants++;
     }
+    return {};
   }
 
   inline Expected applyParseEvent(auto &&parseEvent) {
@@ -50,7 +52,7 @@ template <DecodingTraitsC DecodingTraits, typename T> struct LastHarness {
     return parseEvent(_candidateMopedHandler);
   }
 
-  auto applyTypeHandler(auto &&handlerFunc) {
+  Expected applyHandler(auto &&handlerFunc) {
     if (!_participating) {
       return std::unexpected("No active candidate type at the moment");
     }
@@ -66,14 +68,21 @@ template <DecodingTraitsC DecodingTraits, typename T> struct LastHarness {
   }
 };
 
+template <typename DecodingTraits, typename T, typename... TailTypes>
+static constexpr auto GetCandidateHarnessType() {
+  if constexpr (sizeof...(TailTypes) == 0) {
+    return LastHarness<DecodingTraits, T>{};
+  } else {
+    return CandidateTypeHarness<DecodingTraits, T, TailTypes...>{};
+  }
+}
 template <DecodingTraitsC DecodingTraits, typename T, typename... TailTypes>
 struct CandidateTypeHarness<DecodingTraits, T, TailTypes...> {
   using MOPEDHandlerT = CompositeParserEventDispatcher<T, DecodingTraits>;
 
   using TailingCandidateHarness =
-      std::conditional_t<(sizeof...(TailTypes) == 0),
-                         CandidateTypeHarness<DecodingTraits, TailTypes...>,
-                         LastHarness<DecodingTraits, T>>;
+      decltype(GetCandidateHarnessType<DecodingTraits, TailTypes...>());
+  using DecodingTraitsT = DecodingTraits;
   T _candidateComposite;
   MOPEDHandlerT _candidateMopedHandler;
   TailingCandidateHarness _tailingCandidates;
@@ -99,12 +108,11 @@ struct CandidateTypeHarness<DecodingTraits, T, TailTypes...> {
     _tailingCandidates.template setActiveComposite<SetT>();
   }
 
-  void applyParseEvent(auto &&parseEvent, int &activeParticipants,
-                       std::vector<std::string> &errors) {
+  Expected applyParseEvent(auto &&parseEvent, int &activeParticipants,
+                           std::vector<std::string> &errors) {
     if (!_participating) {
-      _tailingCandidates.applyParseEvent(parseEvent, activeParticipants,
-                                         errors);
-      return;
+      return _tailingCandidates.applyParseEvent(parseEvent, activeParticipants,
+                                                errors);
     }
     auto result = parseEvent(_candidateMopedHandler);
     if (!result) {
@@ -115,7 +123,8 @@ struct CandidateTypeHarness<DecodingTraits, T, TailTypes...> {
     } else {
       activeParticipants++;
     }
-    _tailingCandidates.applyParseEvent(parseEvent, activeParticipants, errors);
+    return _tailingCandidates.applyParseEvent(parseEvent, activeParticipants,
+                                              errors);
   }
 
   inline Expected applyParseEvent(auto &&parseEvent) {
@@ -125,22 +134,16 @@ struct CandidateTypeHarness<DecodingTraits, T, TailTypes...> {
     return _tailingCandidates.applyParseEvent(parseEvent);
   }
 
-  auto applyTypeHandler(auto &&handlerFunc) {
+  Expected applyHandler(auto &&handlerFunc) {
     if (!_participating) {
-      return _tailingCandidates.applyTypeHandler(handlerFunc);
+      return _tailingCandidates.applyHandler(handlerFunc);
     }
     return handlerFunc(_candidateMopedHandler.getComposite());
   }
 };
 
-template <DecodingTraitsC DecodingTraits, typename... CompositeTypes>
-struct AutoTypeSelectingParserHandler {
-  using CandidateHarness = std::conditional_t<
-      (sizeof...(CompositeTypes) > 1),
-      CandidateTypeHarness<DecodingTraits, CompositeTypes...>,
-      LastHarness<DecodingTraits, CompositeTypes...>>;
-
-  using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
+template <typename CandidateHarnessT> struct AutoTypeSelectingParserHandler {
+  using DecodingTraits = typename CandidateHarnessT::DecodingTraitsT;
 
 public:
   template <typename... Args>
@@ -148,6 +151,10 @@ public:
       : _candidateHarness{std::forward<Args>(args)...} {}
 
   Expected onMember(std::string_view memberName) {
+    if (_compositeSet) {
+      return _candidateHarness.applyParseEvent(
+          [&](auto &handler) { return handler.onMember(memberName); });
+    }
     _errors.clear();
     int activeParticipants = 0;
     auto result = _candidateHarness.applyParseEvent(
@@ -160,6 +167,10 @@ public:
   }
 
   Expected onObjectStart() {
+    if (_compositeSet) {
+      return _candidateHarness.applyParseEvent(
+          [&](auto &handler) { return handler.onObjectStart(); });
+    }
     _errors.clear();
     int activeParticipants = 0;
     _candidateHarness.applyParseEvent(
@@ -168,9 +179,14 @@ public:
     if ((activeParticipants == 0) && (!_errors.empty())) {
       return std::unexpected(_errors.front());
     }
+    return {};
   }
 
   Expected onObjectFinish() {
+    if (_compositeSet) {
+      return _candidateHarness.applyParseEvent(
+          [&](auto &handler) { return handler.onObjectFinish(); });
+    }
     _errors.clear();
     int activeParticipants = 0;
     _candidateHarness.applyParseEvent(
@@ -183,6 +199,10 @@ public:
   }
 
   Expected onArrayStart() {
+    if (_compositeSet) {
+      return _candidateHarness.applyParseEvent(
+          [&](auto &handler) { return handler.onArrayStart(); });
+    }
     _errors.clear();
     int activeParticipants = 0;
     auto result = _candidateHarness.applyParseEvent(
@@ -195,6 +215,10 @@ public:
   }
 
   Expected onArrayFinish() {
+    if (_compositeSet) {
+      return _candidateHarness.applyParseEvent(
+          [&](auto &handler) { return handler.onArrayFinish(); });
+    }
     _errors.clear();
     int activeParticipants = 0;
     _candidateHarness.applyParseEvent(
@@ -207,6 +231,10 @@ public:
   }
 
   Expected onStringValue(std::string_view value) {
+    if (_compositeSet) {
+      return _candidateHarness.applyParseEvent(
+          [&](auto &handler) { return handler.onStringValue(value); });
+    }
     _errors.clear();
     int activeParticipants = 0;
     _candidateHarness.applyParseEvent(
@@ -219,6 +247,10 @@ public:
   }
 
   Expected onNumericValue(std::string_view value) {
+    if (_compositeSet) {
+      return _candidateHarness.applyParseEvent(
+          [&](auto &handler) { return handler.onNumericValue(value); });
+    }
     _errors.clear();
     int activeParticipants = 0;
     _candidateHarness.applyParseEvent(
@@ -231,6 +263,10 @@ public:
   }
 
   Expected onBooleanValue(bool value) {
+    if (_compositeSet) {
+      return _candidateHarness.applyParseEvent(
+          [&](auto &handler) { return handler.onBooleanValue(value); });
+    }
     _errors.clear();
     int activeParticipants = 0;
     _candidateHarness.applyParseEvent(
@@ -244,12 +280,23 @@ public:
 
   template <typename... Args> void reset(Args &&...args) {
     _candidateHarness.reset(std::forward<Args>(args)...);
+    _errors.clear();
+    _compositeSet = false;
+  }
+
+  auto applyHandler(auto &&handlerFunc) {
+    return _candidateHarness.applyHandler(handlerFunc);
+  }
+
+  template <typename SetT> void setActiveComposite() {
+    _candidateHarness.template setActiveComposite<SetT>();
+    _compositeSet = true;
   }
 
 private:
+  bool _compositeSet{false};
   std::vector<std::string> _errors;
-  CandidateHarness _candidateHarness;
+  CandidateHarnessT _candidateHarness;
 };
-
 
 } // namespace moped

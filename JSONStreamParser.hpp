@@ -81,14 +81,13 @@ class JSONStreamParser : public ParserBase {
         std::format("Invalid numeric value {}", _reusableBuffer));
   }
 
-  ParseEventDispatchT _eventDispatch;
+  ParseEventDispatchT &_eventDispatch;
 
 public:
-  template <typename... Args>
-  JSONStreamParser(Args &&...args)
-      : _eventDispatch{std::forward<Args>(args)...} {}
+  JSONStreamParser(ParseEventDispatchT &eventDispatch)
+      : _eventDispatch{eventDispatch} {}
 
-  Expected parseInputStream(std::istream &ss) {
+  Expected parse(std::istream &ss) {
     using ValidatorStack = std::stack<char>;
     ValidatorStack vs;
 
@@ -275,7 +274,7 @@ public:
 
   Expected parseJsonText(const std::string &jsonText) {
     std::stringstream ss{jsonText};
-    return parseInputStream(ss);
+    return parse(ss);
   }
 
   auto &getDispatcher() { return _eventDispatch; }

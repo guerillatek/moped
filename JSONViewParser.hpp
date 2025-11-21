@@ -15,7 +15,7 @@ class JSONViewParser : public ParserBase {
   using Iterator = std::string_view::const_iterator;
   using ExpectedText = std::expected<std::string_view, std::string>;
 
-  ParseEventDispatchT _eventDispatch;
+  ParseEventDispatchT &_eventDispatch;
 
   // Utility: skip whitespace
   static void skipWhitespace(Iterator &it, Iterator end) {
@@ -72,9 +72,8 @@ class JSONViewParser : public ParserBase {
   }
 
 public:
-  template <typename... Args>
-  JSONViewParser(Args &&...args)
-      : _eventDispatch{std::forward<Args>(args)...} {}
+  JSONViewParser(ParseEventDispatchT &eventDispatch)
+      : _eventDispatch(eventDispatch) {}
 
   Expected parse(std::string_view json) {
     using ValidatorStack = std::stack<char>;

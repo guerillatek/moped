@@ -11,11 +11,12 @@ std::expected<CompositeT, std::string>
 parseCompositeFromJSONStream(TFT, std::istream &jsonStream, Args &&...args) {
   using DispatcherT =
       CompositeParserEventDispatcher<CompositeT, StringDecodingTraits<TFT>>;
-  JSONStreamParser<DispatcherT> parser{std::forward<Args>(args)...};
-  if (auto result = parser.parseInputStream(jsonStream); !result) {
+  DispatcherT dispatcher{std::forward<Args>(args)...};
+  JSONStreamParser<DispatcherT> parser{dispatcher};
+  if (auto result = parser.parse(jsonStream); !result) {
     return std::unexpected(result.error());
   }
-  return parser.getDispatcher().moveComposite();
+  return dispatcher.moveComposite();
 }
 
 template <typename CompositeT, typename TFT, typename... Args>
@@ -34,7 +35,7 @@ parseCompositeFromJSONView(TFT, std::string_view jsonView, Args &&...args) {
   using DispatcherT =
       CompositeParserEventDispatcher<CompositeT, StringDecodingTraits<TFT>>;
   DispatcherT dispatcher{std::forward<Args>(args)...};
-  JSONViewParser<DispatcherT> parser{std::forward<Args>(args)...};
+  JSONViewParser<DispatcherT> parser{dispatcher};
   if (auto result = parser.parse(jsonView); !result) {
     return std::unexpected(result.error());
   }
