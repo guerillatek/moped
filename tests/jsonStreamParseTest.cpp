@@ -87,8 +87,9 @@ TEST_CASE("Instrument Data load Test with streaming parser and  "
       moped::parseCompositeFromJSONStream<ExchangeInfoWithSymbolDispatch>(
           DFTF{}, instrumentData,
           moped::CollectionFunctionDispatcher<Symbol>{
-              [&capturedSymbols](const Symbol &sym) {
+              [&capturedSymbols](const Symbol &sym) -> moped::Expected {
                 capturedSymbols.push_back(sym);
+                return {};
               }});
   if (!result) {
     FAIL(result.error().c_str());

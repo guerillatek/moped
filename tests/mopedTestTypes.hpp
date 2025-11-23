@@ -297,9 +297,7 @@ struct ExchangeInfoWithSymbolDispatch {
   ExchangeInfoWithSymbolDispatch(auto &&handler)
       : symbols(std::move(handler)) {}
 
-  ExchangeInfoWithSymbolDispatch()
-      : symbols([](const Symbol &) {}) {} // Default constructor
-
+  ExchangeInfoWithSymbolDispatch()= default;
   template <moped::DecodingTraitsC DecodingTraits>
   static auto getMOPEDHandler() {
     return moped::mopedHandler<DecodingTraits, ExchangeInfoWithSymbolDispatch>(

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "concepts.hpp"
+#include "moped/concepts.hpp"
 
 #include "ScaledInteger.hpp"
 #include <charconv>
@@ -216,7 +216,9 @@ struct Handler<MemberT, DecodingTraits>
 
   Expected onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
     if (_currentIndex > 0) {
-      _dispatcher->dispatchLastCapture();
+      if (auto result = _dispatcher->dispatchLastCapture(); !result) {
+        return result;
+      }
     }
 
     if constexpr (HasCompositeValueType) {
@@ -239,7 +241,9 @@ struct Handler<MemberT, DecodingTraits>
     }
     if (handlerStack.top() == this) {
       if (_currentIndex > 0) {
-        _dispatcher->dispatchLastCapture();
+        if (auto result = _dispatcher->dispatchLastCapture(); !result) {
+          return result;
+        }
       }
       if constexpr (is_array<ValueType> || IsMOPEDPushCollectionC<ValueType>) {
         this->_valueTypeHandler.setTargetMember(_dispatcher->resetCapture());
@@ -256,7 +260,9 @@ struct Handler<MemberT, DecodingTraits>
   }
 
   Expected onArrayFinish(MOPEDHandlerStack &handlerStack) override {
-    _dispatcher->dispatchLastCapture();
+    if (auto result = _dispatcher->dispatchLastCapture(); !result) {
+      return result;
+    }
     handlerStack.pop();
     _currentIndex = 0;
     return {};
@@ -264,7 +270,9 @@ struct Handler<MemberT, DecodingTraits>
 
   Expected onStringValue(std::string_view value) override {
     if (_currentIndex > 0) {
-      _dispatcher->dispatchLastCapture();
+      if (auto result = _dispatcher->dispatchLastCapture(); !result) {
+        return result;
+      }
     }
     HandleScalarValue(value);
     _currentIndex++;
@@ -273,7 +281,9 @@ struct Handler<MemberT, DecodingTraits>
 
   Expected onNumericValue(std::string_view value) override {
     if (_currentIndex > 0) {
-      _dispatcher->dispatchLastCapture();
+      if (auto result = _dispatcher->dispatchLastCapture(); !result) {
+        return result;
+      }
     }
     HandleScalarValue(value);
     _currentIndex++;
@@ -299,7 +309,9 @@ private:
         return std::unexpected(result.error());
       }
       _dispatcher->setCurrentValue(result.value());
-      _dispatcher->dispatchLastCapture();
+      if (auto result = _dispatcher->dispatchLastCapture(); !result) {
+        return result;
+      }
     }
     return {};
   }
@@ -334,7 +346,8 @@ struct Handler<MemberT, DecodingTraits>
         return std::unexpected("Index out of bounds");
       }
 
-      this->_valueTypeHandler.setTargetMember(*_targetArray[_currentIndex++]);
+      auto &currentElement = (*_targetArray)[_currentIndex++];
+      this->_valueTypeHandler.setTargetMember(currentElement);
       return this->_valueTypeHandler.onObjectStart(eventHandlerStack);
     } else {
       return std::unexpected(

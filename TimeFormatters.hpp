@@ -28,7 +28,8 @@ public:
     return TimePoint{FractionalDurationT{input}};
   }
 
-  static std::expected<TimePoint, std::string> getTimeValue(auto input) {
+  static std::expected<TimePoint, std::string> getTimeValue(auto src) {
+    auto input = std::string_view(std::begin(src), std::end(src));
     // Make sure the input is numeric
     if (input.empty() || !std::all_of(input.begin(), input.end(),
                                       [](char c) { return std::isdigit(c); })) {
@@ -59,7 +60,8 @@ public:
 template <typename FractionalDurationT = std::chrono::milliseconds>
 class ISO8601Formatter {
 public:
-  static std::expected<TimePoint, std::string> getTimeValue(auto input) {
+  static std::expected<TimePoint, std::string> getTimeValue(auto src) {
+    auto input = std::string_view{src};
     std::tm tm = {};
     // Parse date and time (YYYY-MM-DDTHH:MM:SS)
     char *fractAndOffsetStart =
@@ -130,9 +132,9 @@ public:
 
     // Parse timezone offset if exists
     int tz_offset = 0;
-    const char *tz_start = frac_start
-                               ? frac_start + strcspn(frac_start, "+-Z")
-                               : fractAndOffsetStart + strcspn(fractAndOffsetStart, "+-Z");
+    const char *tz_start =
+        frac_start ? frac_start + strcspn(frac_start, "+-Z")
+                   : fractAndOffsetStart + strcspn(fractAndOffsetStart, "+-Z");
     if (*tz_start == '+' || *tz_start == '-') {
       int sign = (*tz_start == '-') ? -1 : 1;
       if (strlen(tz_start) >= 6) {

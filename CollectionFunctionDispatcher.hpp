@@ -1,6 +1,6 @@
 #pragma once
 
-#include "concepts.hpp"
+#include "moped/concepts.hpp"
 
 #include <optional>
 
@@ -17,7 +17,7 @@ template <typename ValueT> class CollectionFunctionDispatcher {
 
 public:
   using value_type = ValueT;
-  using HandlerT = std::function<void(const ValueT &)>;
+  using HandlerT = std::function<Expected(const ValueT &)>;
 
   ValueT &resetCapture() {
     _captureValue = ValueT{};
@@ -29,12 +29,16 @@ public:
 
   void setCurrentValue(const ValueT &value) { _captureValue = value; }
 
-  void dispatchLastCapture() {
-    if (!_captureValue.has_value()) {
-      return;
+  Expected dispatchLastCapture() {
+    if (!_handler) {
+      return std::unexpected("No function assigned to collection dispatcher");
     }
-    _handler(*_captureValue);
+    if (!_captureValue) {
+      return {};
+    }
+    auto result = _handler(*_captureValue);
     _captureValue.reset();
+    return result;
   }
 
   void setHandler(auto &&handler) { _handler = std::move(handler); }
