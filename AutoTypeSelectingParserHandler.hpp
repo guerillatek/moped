@@ -278,6 +278,22 @@ public:
     return {};
   }
 
+  Expected onNullValue() {
+    if (_compositeSet) {
+      return _candidateHarness.applyParseEvent(
+          [&](auto &handler) { return handler.onNullValue(); });
+    }
+    _errors.clear();
+    int activeParticipants = 0;
+    _candidateHarness.applyParseEvent(
+        [&](auto &handler) { return handler.onNullValue(); },
+        activeParticipants, _errors);
+    if ((activeParticipants == 0) && (!_errors.empty())) {
+      return std::unexpected(_errors.front());
+    }
+    return {};
+  }
+
   template <typename... Args> void reset(Args &&...args) {
     _candidateHarness.reset(std::forward<Args>(args)...);
     _errors.clear();

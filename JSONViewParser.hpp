@@ -153,26 +153,36 @@ public:
             return stringValueResult; // Both are Expected, return directly
           }
         } break;
+        case 'n':
         case 't':
         case 'f': {
           // Boolean
           Iterator boolStart = it;
           while (it != end && std::isalpha(*it))
             ++it;
-          std::string_view boolText{boolStart,
-                                    static_cast<size_t>(it - boolStart)};
-          if (boolText == "true") {
+          std::string_view nullBoolText{boolStart,
+                                        static_cast<size_t>(it - boolStart)};
+          if (nullBoolText == "true") {
             auto boolResult = _eventDispatch.onBooleanValue(true);
             if (!boolResult) {
               return boolResult; // Both are Expected, return directly
             }
-          } else if (boolText == "false") {
+          } else if (nullBoolText == "false") {
             auto boolResult = _eventDispatch.onBooleanValue(false);
             if (!boolResult) {
               return boolResult; // Both are Expected, return directly
             }
+          } else if (nullBoolText == "null") {
+            auto nullResult = _eventDispatch.onNullValue();
+            if (!nullResult) {
+              return nullResult; // Both are Expected, return directly
+            }
           } else {
-            return std::unexpected("Invalid boolean value");
+            return std::unexpected(
+                std::format("Invalid unquoted non numeric string, only "
+                            "'true', 'false', and "
+                            "'null' are valid RFC 7159 values'{}'",
+                            nullBoolText));
           }
         } break;
         case ']':

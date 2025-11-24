@@ -1,7 +1,7 @@
 #pragma once
 
-#include "moped/concepts.hpp"
 #include "moped/ParserBase.hpp"
+#include "moped/concepts.hpp"
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -175,26 +175,35 @@ public:
             return stringValueResult; // Both are Expected, return directly
           }
         } break;
+        case 'n':
         case 't':
         case 'f': {
           // Boolean values
-          std::string boolText;
+          std::string nullBoolText;
           while (ss && isalpha(ss.peek())) {
-            boolText += ss.get();
+            nullBoolText += ss.get();
           }
-          if (boolText == "true") {
+          if (nullBoolText == "true") {
             auto boolResult = _eventDispatch.onBooleanValue(true);
             if (!boolResult) {
               return boolResult; // Both are Expected, return directly
             }
-          } else if (boolText == "false") {
+          } else if (nullBoolText == "false") {
             auto boolResult = _eventDispatch.onBooleanValue(false);
             if (!boolResult) {
               return boolResult; // Both are Expected, return directly
             }
-          } else {
-            return std::unexpected(
-                std::format("Invalid boolean value '{}'", boolText));
+          } else if (nullBoolText == "null") {
+            auto nullResult = _eventDispatch.onNullValue();
+            if (!nullResult) {
+              return nullResult; // Both are Expected, return directly
+            } else {
+              return std::unexpected(
+                  std::format("Invalid unquoted non numeric string, only "
+                              "'true', 'false', and "
+                              "'null' are valid RFC 7159 values'{}'",
+                              nullBoolText));
+            }
           }
         } break;
         case ']':

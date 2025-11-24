@@ -60,6 +60,13 @@ std::expected<TargetT, std::string> getValueFor(std::string_view value) {
     return result.value();
   } else if constexpr (is_scaled_int<TargetT>) {
     return TargetT{value};
+  } else if constexpr (is_mapped_enum<TargetT>) {
+    try {
+      return TargetT{value};
+    } catch (const std::exception &e) {
+      return std::unexpected(std::format(
+          "Failed to convert '{}' to mapped enum: {}", value, e.what()));
+    }
   } else {
     return std::unexpected("Unsupported type for value conversion: " +
                            std::string(typeid(TargetT).name()));
@@ -769,6 +776,10 @@ struct MappedObjectParserEncoderDispatcher : IMOPEDHandler<DecodingTraits> {
     return setActiveMemberValue<0>(value);
   }
 
+  Expected onNullValue() override {
+    return applyNullValueToActiveMember<0>();
+  }
+
   void setTargetMember(CaptureType &targetMember) {
     _captureObject = &targetMember;
     _activeMemberOffset.reset();
@@ -853,6 +864,28 @@ private:
             .setValue(*_captureObject, value);
       }
       return setActiveMemberValue<MemberIndex + 1>(value);
+    }
+  }
+
+  template <size_t MemberIndex> Expected applyNullValueToActiveMember() {
+    if constexpr (MemberIndex == std::tuple_size_v<MemberEventHandlerTuple>) {
+      return std::unexpected("Parse error ... no active member available");
+    } else {
+      if (!_activeMemberOffset.has_value()) {
+        return std::unexpected(
+            "Parse error ... no active member available for current value null");   
+      }
+      if (MemberIndex == *_activeMemberOffset) {
+        auto &memberValue = std::get<MemberIndex>(_handlerTuple).getMember(*_captureObject);
+        if constexpr (IsOptionalC<std::decay_t<decltype(memberValue)>, DecodingTraits>) {
+          memberValue.reset();
+          return {};
+        } else {
+          return std::unexpected(
+              "Parse error ... null value not applicable for non-optional member");
+        }
+      }
+      return applyNullValueToActiveMember<MemberIndex + 1>();
     }
   }
 

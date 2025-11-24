@@ -55,6 +55,7 @@ struct CompositeParserEventDispatcher {
     return _mopedHandlerStack.top()->onBooleanValue(value);
   }
 
+  Expected onNullValue() { return _mopedHandlerStack.top()->onNullValue(); }
   auto &&moveComposite() { return std::move(_composite); }
 
   auto &getComposite() { return _composite; }

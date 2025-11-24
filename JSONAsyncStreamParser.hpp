@@ -284,36 +284,44 @@ public:
             co_return std::unexpected(result.error());
           }
         } break;
+        case 'n':
         case 't':
         case 'f': {
           // Boolean values
-          std::string boolText;
+          std::string nullBoolText;
           while (isalpha(c)) {
-            boolText += _activeStream.get();
+            nullBoolText += _activeStream.get();
             if (auto result = co_await coWaitForValidStream(
                     [&, this]() {
                       return std::format("Unexpected end of frame while "
                                          "reading boolean content {}",
-                                         boolText);
+                                         nullBoolText);
                     },
                     [&, this]() { c = _activeStream.peek(); });
                 !result) {
               co_return std::unexpected(result.error());
             }
           }
-          if (boolText == "true") {
+          if (nullBoolText == "true") {
             auto result = _eventDispatch.onBooleanValue(true);
             if (!result) {
               co_return std::unexpected(result.error());
             }
-          } else if (boolText == "false") {
+          } else if (nullBoolText == "false") {
             auto result = _eventDispatch.onBooleanValue(false);
+            if (!result) {
+              co_return std::unexpected(result.error());
+            }
+          } else if (nullBoolText == "null") {
+            auto result = _eventDispatch.onNullValue();
             if (!result) {
               co_return std::unexpected(result.error());
             }
           } else {
             co_return std::unexpected(
-                std::format("Invalid boolean value '{}'", boolText));
+                std::format("Invalid unquoted non numeric string, only 'true', 'false', and "
+                            "'null' are valid RFC 7159 values'{}'",
+                            nullBoolText));
           }
         } break;
         case ']':

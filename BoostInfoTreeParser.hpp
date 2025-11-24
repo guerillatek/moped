@@ -13,7 +13,7 @@ template <IParserEventDispatchC ParseEventDispatchT> class BoostInfoTreeParser {
 
   // Helper to recursively walk the ptree and dispatch events
   Expected walk(const boost::property_tree::ptree &node,
-            std::string_view key = {}) {
+                std::string_view key = {}) {
     using ptree = boost::property_tree::ptree;
 
     if (!key.empty())
@@ -24,6 +24,9 @@ template <IParserEventDispatchC ParseEventDispatchT> class BoostInfoTreeParser {
       const std::string &val = node.data();
       if (val == "true" || val == "false") {
         _eventDispatch.onBooleanValue(val == "true");
+      }
+      else if (val == "null") {
+        _eventDispatch.onNulValue();
       } else if (!val.empty() &&
                  std::all_of(val.begin(), val.end(), ::isdigit)) {
         _eventDispatch.onNumericValue(val);

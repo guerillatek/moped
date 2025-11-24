@@ -279,13 +279,17 @@ private:
             co_return std::unexpected(stringResult.error());
           }
         } break;
+        case 'n':
         case 't':
         case 'f': {
-          auto result = co_await getBooleanValueAsync();
+          auto result = co_await getNullBooleanValueAsync();
           if (!result) {
             co_return std::unexpected(result.error());
           }
-          auto boolResult = _eventDispatch.onBooleanValue(result.value());
+          if (!(result.value())) {
+            _eventDispatch.onNullValue();
+          }
+          auto boolResult = _eventDispatch.onBooleanValue(*(result.value()));
           if (!boolResult) {
             co_return std::unexpected(boolResult.error());
           }
@@ -462,7 +466,8 @@ private:
         std::format("Invalid numeric value {}", _reusableBuffer));
   }
 
-  std::awaitable<std::expected<bool, std::string>> getBooleanValueAsync() {
+  std::awaitable<std::expected<std::optional<bool>, std::string>>
+  getNullBooleanValueAsync() {
     if (_partialState == PartialState::BooleanValue) {
       _reusableBuffer = _partialBuffer;
       _partialBuffer.clear();
@@ -486,10 +491,14 @@ private:
       co_return true;
     } else if (_reusableBuffer == "false") {
       co_return false;
+    } else if (_reusableBuffer == "null") {
+      co_return std::nullopt;
     }
 
-    co_return std::unexpected(
-        std::format("Invalid boolean value '{}'", _reusableBuffer));
+    co_return std::unexpected(std::format(
+        "Invalid unquoted non numeric string, only 'true', 'false', and "
+        "'null' are valid RFC 7159 values'{}'",
+        _reusableBuffer));
   }
 
   void saveStreamState() {

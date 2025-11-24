@@ -41,6 +41,7 @@ concept IParserEventDispatchC = requires(T t) {
   { t.onArrayFinish() } -> std::same_as<Expected>;
   { t.onStringValue(std::string_view{}) } -> std::same_as<Expected>;
   { t.onBooleanValue(bool{}) } -> std::same_as<Expected>;
+  { t.onNullValue() } -> std::same_as<Expected>;
   { t.onNumericValue(std::string_view{}) } -> std::same_as<Expected>;
 };
 
@@ -80,6 +81,10 @@ template <DecodingTraitsC DecodingTraits> struct IMOPEDHandler {
 
   virtual Expected onBooleanValue(bool) {
     return std::unexpected("Unhandled boolean value event");
+  }
+
+  virtual Expected onNullValue() {
+    return std::unexpected("Unhandled null value event");
   }
 
   virtual Expected onRawBinary(void *) {
@@ -175,7 +180,6 @@ concept IsMOPEDMapCollectionC = requires(T t) {
   } -> std::same_as<typename T::mapped_type &>;
 };
 
-
 template <typename T> struct is_std_array : std::false_type {};
 
 template <typename T, std::size_t N>
@@ -188,12 +192,8 @@ inline constexpr bool is_std_array_v =
 template <typename T>
 concept is_array = std::is_array_v<T> || is_std_array_v<T>;
 
-
 template <typename T>
-concept IsMOPEDContentCollectionC =
-    IsMOPEDPushCollectionC<T> || is_array<T>;
-
-
+concept IsMOPEDContentCollectionC = IsMOPEDPushCollectionC<T> || is_array<T>;
 
 template <typename T, typename DecodingTraits>
 concept IsOptionalC = requires(T t) {

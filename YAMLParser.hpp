@@ -117,6 +117,11 @@ public:
             if (!boolResult) {
               return boolResult; // Both are Expected, return directly
             }
+          } else if (value == "null") {
+            auto nullResult = _eventDispatch.onNullValue();
+            if (!nullResult) {
+              return nullResult; // Both are Expected, return directly
+            }
           } else if (ParserBase::isNumeric(value_str)) {
             auto numericResult = _eventDispatch.onNumericValue(value);
             if (!numericResult) {

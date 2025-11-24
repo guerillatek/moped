@@ -81,6 +81,7 @@ public:
   Expected onBooleanValue(bool value) {
     return _parserHandler.onBooleanValue(value);
   }
+  Expected onNullValue() { return _parserHandler.onNullValue(); }
 };
 
 } // namespace moped
