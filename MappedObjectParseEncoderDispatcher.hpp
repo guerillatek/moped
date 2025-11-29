@@ -379,7 +379,7 @@ struct Handler<MemberT, DecodingTraits>
           return std::unexpected("Index out of bounds");
         }
 
-        this->_valueTypeHandler.setTargetMember(*_targetArray[_currentIndex++]);
+        this->_valueTypeHandler.setTargetMember((*_targetArray)[_currentIndex++]);
         return this->_valueTypeHandler.onArrayStart(handlerStack);
       } else {
         return std::unexpected(
