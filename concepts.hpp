@@ -126,6 +126,9 @@ concept is_variant = is_variant_v<std::remove_cvref_t<T>>;
 template <typename T>
 concept is_integral = std::is_integral_v<T>;
 
+template <typename T, moped::DecodingTraitsC DecodingTraits, typename HandlerT>
+HandlerT getMOPEDHandler();
+
 template <typename T>
 concept IsMOPEDValueC =
     std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view> ||
@@ -140,12 +143,17 @@ concept HasEmbeddedHandler =
 template <typename T, typename DecodingTraits> void getMOPEDHandler() {}
 
 template <typename T, moped::DecodingTraitsC DecodingTraits>
-static auto getMOPEDHandlerForParser() {
-  if constexpr (HasEmbeddedHandler<T, DecodingTraits>) {
-    return T::template getMOPEDHandler<DecodingTraits>();
-  } else {
-    return getMOPEDHandler<T, DecodingTraits>();
+struct MopedHandlerManager {
+  static auto getHandler() {
+    if constexpr (requires { T::template getMOPEDHandler<DecodingTraits>(); }) {
+      return T::template getMOPEDHandler<DecodingTraits>();
+    }
   }
+};
+
+template <typename T, moped::DecodingTraitsC DecodingTraits>
+static auto getMOPEDHandlerForParser() {
+  return MopedHandlerManager<T, DecodingTraits>::getHandler();
 }
 
 template <typename T>
@@ -153,7 +161,7 @@ concept NotVoidResult = !std::is_void_v<T>;
 
 template <typename T, typename DecodingTraits>
 concept IsMOPEDCompositeC = requires() {
-  { getMOPEDHandlerForParser<T, DecodingTraits>() } -> NotVoidResult;
+  { MopedHandlerManager<T, DecodingTraits>::getHandler() } -> NotVoidResult;
 };
 
 template <typename T, typename DecodingTraits>
@@ -175,9 +183,8 @@ concept IsMOPEDCompositeDispatcherC = requires(T t) {
 
 template <typename T>
 concept IsMOPEDMapCollectionC = requires(T t) {
-  {
-    t.operator[](std::declval<typename T::key_type>())
-  } -> std::same_as<typename T::mapped_type &>;
+  t.emplace(std::declval<typename T::key_type>(),
+            std::declval<typename T::mapped_type>());
 };
 
 template <typename T> struct is_std_array : std::false_type {};

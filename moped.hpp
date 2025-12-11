@@ -1,80 +1,17 @@
 #pragma once
 
+#include "moped/AutoTypeSelectingParserDispatcher.hpp"
+#include "moped/AutoTypeSelectingParserHandler.hpp"
+#include "moped/CollectionFunctionDispatcher.hpp"
+#include "moped/CompositeParseEventDispatcher.hpp"
+#include "moped/MappedEnum.hpp"
 #include "moped/MappedObjectParseEncoderDispatcher.hpp"
+#include "moped/PivotMemberTypeSelector.hpp"
+#include "moped/ScaledInteger.hpp"
 #include "moped/TimeFormatters.hpp"
+#include "moped/concepts.hpp"
 
-#include <expected>
 namespace moped {
-
-using Expected = std::expected<void, std::string>;
-
-template <typename CompositeT, DecodingTraitsC DecodingTraits>
-  requires IsMOPEDCompositeC<CompositeT, DecodingTraits>
-struct CompositeParserEventDispatcher {
-  using CompositeMOPEDHandler = std::decay_t<
-      decltype(getMOPEDHandlerForParser<CompositeT, DecodingTraits>())>;
-  using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
-
-  template <typename... Args>
-  CompositeParserEventDispatcher(Args &&...args)
-      : _compositeMOPEDHandler{getMOPEDHandlerForParser<CompositeT,
-                                                        DecodingTraits>()},
-        _composite{std::forward<Args>(args)...} {
-    _compositeMOPEDHandler.setTargetMember(_composite);
-  }
-
-  Expected onMember(std::string_view memberName) {
-    return _mopedHandlerStack.top()->onMember(_mopedHandlerStack, memberName);
-  }
-  Expected onObjectStart() {
-    if (_mopedHandlerStack.empty()) {
-      return _compositeMOPEDHandler.onObjectStart(_mopedHandlerStack);
-    }
-    return _mopedHandlerStack.top()->onObjectStart(_mopedHandlerStack);
-  }
-  Expected onObjectFinish() {
-    return _mopedHandlerStack.top()->onObjectFinish(_mopedHandlerStack);
-  }
-
-  Expected onArrayStart() {
-    return _mopedHandlerStack.top()->onArrayStart(_mopedHandlerStack);
-  }
-  Expected onArrayFinish() {
-    return _mopedHandlerStack.top()->onArrayFinish(_mopedHandlerStack);
-  }
-
-  Expected onStringValue(std::string_view value) {
-    return _mopedHandlerStack.top()->onStringValue(value);
-  }
-
-  Expected onNumericValue(std::string_view value) {
-    return _mopedHandlerStack.top()->onNumericValue(value);
-  }
-
-  Expected onBooleanValue(bool value) {
-    return _mopedHandlerStack.top()->onBooleanValue(value);
-  }
-
-  Expected onNullValue() { return _mopedHandlerStack.top()->onNullValue(); }
-  auto &&moveComposite() { return std::move(_composite); }
-
-  auto &getComposite() { return _composite; }
-
-  template <typename... Args> void reset(Args &&...args) {
-    _compositeMOPEDHandler.reset();
-    std::destroy_at(&_composite);
-    std::construct_at(&_composite,
-                      std::forward<Args>(args)...); // Reconstruct with new args
-    while (!_mopedHandlerStack.empty()) {
-      _mopedHandlerStack.pop();
-    }
-  }
-
-private:
-  CompositeMOPEDHandler _compositeMOPEDHandler;
-  CompositeT _composite;
-  MOPEDHandlerStack _mopedHandlerStack;
-};
 
 template <typename TimePointFormatter = DurationSinceEpochFormatter<>,
           typename PivotValueType = std::string_view>

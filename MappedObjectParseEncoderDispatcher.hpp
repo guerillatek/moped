@@ -1,82 +1,11 @@
 #pragma once
 
+#include "moped/AutoTypeSelectingParserHandler.hpp"
 #include "moped/concepts.hpp"
-
-#include "ScaledInteger.hpp"
-#include <charconv>
-#include <cstdint>
-#include <expected>
-#include <format>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
+#include "moped/getValueFor.hpp"
 #include <tuple>
-#include <type_traits>
 
 namespace moped {
-
-template <typename NumericT>
-inline std::expected<NumericT, std::string> ston(std::string_view value) {
-  NumericT result;
-  auto [ptr, ec] =
-      std::from_chars(value.data(), value.data() + value.size(), result);
-  if (ec != std::errc{}) {
-    return std::unexpected(
-        std::format("Failed to convert '{}' to numeric", value));
-  }
-  return result;
-}
-
-template <typename TargetT, typename DecodingTraits>
-std::expected<TargetT, std::string> getValueFor(std::string_view value) {
-  if constexpr (std::is_same_v<TargetT, bool>) {
-    if (value == "true" || value == "1") {
-      return true;
-    } else if (value == "false" || value == "0") {
-      return false;
-    } else {
-      return std::unexpected("Invalid boolean value: " + std::string{value});
-    }
-  } else if constexpr (std::is_same_v<TargetT, TimePoint>) {
-    auto epochTime = DecodingTraits::TimePointFormaterT::getTimeValue(value);
-    if (!epochTime) {
-      throw std::runtime_error(epochTime.error());
-    }
-    return epochTime.value();
-  } else if constexpr (std::is_same_v<TargetT, std::string> ||
-                       std::is_same_v<TargetT, std::string_view>) {
-    return TargetT{value};
-  } else if constexpr (std::is_same_v<TargetT, const char *>) {
-    return value.data();
-  } else if constexpr ((std::is_integral_v<TargetT>) ||
-                       (std::is_floating_point_v<TargetT>)) {
-    return ston<TargetT>(value);
-  } else if constexpr (IsOptionalC<TargetT, DecodingTraits>) {
-    auto result =
-        getValueFor<typename TargetT::value_type, DecodingTraits>(value);
-    if (!result) {
-      return std::unexpected(result.error());
-    }
-    return result.value();
-  } else if constexpr (is_scaled_int<TargetT>) {
-    return TargetT{value};
-  } else if constexpr (is_mapped_enum<TargetT>) {
-    try {
-      return TargetT{value};
-    } catch (const std::exception &e) {
-      return std::unexpected(std::format(
-          "Failed to convert '{}' to mapped enum: {}", value, e.what()));
-    }
-  } else {
-    return std::unexpected("Unsupported type for value conversion: " +
-                           std::string(typeid(TargetT).name()));
-  }
-}
-
-template <typename TargetT, typename DecodingTraits>
-std::expected<bool, std::string> getValueFor(bool value) {
-  return value;
-}
 
 template <typename MemberT, DecodingTraitsC DecodingTraits> struct Handler {
   using MemberType = MemberT;
@@ -90,14 +19,20 @@ template <typename T, DecodingTraitsC DecodingTraits>
   requires(IsMOPEDCompositeC<T, DecodingTraits>)
 struct ValueHandlerBase<T, DecodingTraits> {
 
-  using ValueTypeHandlerT =
-      std::decay_t<decltype(T::template getMOPEDHandler<DecodingTraits>())>;
+  using ValueTypeHandlerT = std::decay_t<
+      decltype(MopedHandlerManager<T, DecodingTraits>::getHandler())>;
 
   ValueTypeHandlerT _valueTypeHandler{
       getMOPEDHandlerForParser<T, DecodingTraits>()};
 };
 
 template <IsMOPEDContentCollectionC T, DecodingTraitsC DecodingTraits>
+struct ValueHandlerBase<T, DecodingTraits> {
+  using ValueTypeHandlerT = Handler<T, DecodingTraits>;
+  ValueTypeHandlerT _valueTypeHandler{};
+};
+
+template <is_variant T, DecodingTraitsC DecodingTraits>
 struct ValueHandlerBase<T, DecodingTraits> {
   using ValueTypeHandlerT = Handler<T, DecodingTraits>;
   ValueTypeHandlerT _valueTypeHandler{};
@@ -115,8 +50,7 @@ struct Handler<MemberT, DecodingTraits>
       IsMOPEDCompositeC<typename MemberT::value_type, DecodingTraits>;
   using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
 
-  Expected onMember(MOPEDHandlerStack &eventHandlerStack,
-                    MemberIdType memberId) override {
+  Expected onMember(MOPEDHandlerStack &, MemberIdType) override {
     return std::unexpected("Parse error!!! onObjectFinish event not expected"
                            " in collection handler");
   }
@@ -130,7 +64,7 @@ struct Handler<MemberT, DecodingTraits>
     return {};
   }
 
-  Expected onObjectFinish(MOPEDHandlerStack &handlerStack) override {
+  Expected onObjectFinish(MOPEDHandlerStack &) override {
     return std::unexpected("Parse error!!! onObjectFinish event not expected"
                            " in collection handler");
   }
@@ -379,7 +313,8 @@ struct Handler<MemberT, DecodingTraits>
           return std::unexpected("Index out of bounds");
         }
 
-        this->_valueTypeHandler.setTargetMember((*_targetArray)[_currentIndex++]);
+        this->_valueTypeHandler.setTargetMember(
+            (*_targetArray)[_currentIndex++]);
         return this->_valueTypeHandler.onArrayStart(handlerStack);
       } else {
         return std::unexpected(
@@ -469,13 +404,13 @@ struct Handler<MemberT, DecodingTraits>
 
   using MemberType = MemberT;
   using KeyType = typename MemberT::key_type;
-  using MappedType = typename MemberT::value_type;
+  using MappedType = typename MemberT::mapped_type;
   static constexpr bool HasCompositeMappedType =
-      IsMOPEDCompositeC<typename MemberT::mapped_type, DecodingTraits>;
+      IsMOPEDCompositeC<MappedType, DecodingTraits> || is_variant<MappedType>;
+
   using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
 
-  Expected onMember(MOPEDHandlerStack &eventHandlerStack,
-                    MemberIdType memberId) override {
+  Expected onMember(MOPEDHandlerStack &, MemberIdType memberId) override {
     _currentKey = memberId;
     return {};
   }
@@ -487,8 +422,16 @@ struct Handler<MemberT, DecodingTraits>
       return {};
     }
     if constexpr (HasCompositeMappedType) {
-      this->_valueTypeHandler.setTargetMember(
-          (*_targetCollection)[_currentKey]);
+      auto entryResult = _targetCollection->emplace(_currentKey, MappedType{});
+
+      if constexpr (requires {
+                      this->_valueTypeHandler.setTargetMember(entryResult.first->second);
+                    }) {
+        this->_valueTypeHandler.setTargetMember(entryResult.first->second);
+      }
+      else {
+        this->_valueTypeHandler.setTargetMember(entryResult->second);
+      }
       return this->_valueTypeHandler.onObjectStart(eventHandlerStack);
     } else {
       return std::unexpected(
@@ -547,11 +490,13 @@ private:
       return std::unexpected(
           "Parse error!!! No active composite handler to set value");
     } else {
+      static_assert(!is_variant<MappedType>,
+                    "Variant mapped types require composite handler support");
       auto result = getValueFor<MappedType, DecodingTraits>(value);
       if (!result) {
         return std::unexpected(result.error());
       }
-      (*_targetCollection)[_currentKey] = result.value();
+      _targetCollection->emplace(_currentKey, result.value());
     }
     return {};
   }
@@ -570,7 +515,7 @@ struct Handler<MemberT, DecodingTraits>
   using MemberIdT = typename DecodingTraits::MemberIdType;
 
   void setTargetMember(MemberT &targetMember) {
-    targetMember = MemberT{};
+    targetMember = typename MemberT::value_type{};
     Handler<typename MemberT::value_type, DecodingTraits>::setTargetMember(
         targetMember.value());
   }
@@ -587,57 +532,15 @@ struct Handler<MemberT, DecodingTraits>
   using MemberIdT = typename DecodingTraits::MemberIdType;
 
   Handler()
-      : HandlerBase(MemberT::template getMOPEDHandler<DecodingTraits>()) {}
-};
-
-template <DecodingTraitsC DecodingTraits, typename T>
-struct FinalMultiMopedHandlerHarness {
-  using HandlerT =
-      std::decay_t<decltype(getMOPEDHandlerForParser<DecodingTraits, T>())>;
-  HandlerT handler;
-  template <typename TargetType> auto &getHandlerForType() {
-    if constexpr (std::is_same_v<TargetType, T>) {
-      return handler;
-    } else {
-      static_assert(false, "Type not found in MultiMopedHandlerHarness");
-    }
-  }
-};
-
-template <DecodingTraitsC DecodingTraits, typename T, typename... MOPEDTypes>
-struct MultiMopedHandlerHarness;
-
-template <DecodingTraitsC DecodingTraits, typename T, typename... MOPEDTypes>
-constexpr auto getMultiMopedHandlerHarness() {
-  if constexpr (sizeof...(MOPEDTypes) == 1) {
-    return FinalMultiMopedHandlerHarness<DecodingTraits, T>{};
-  } else {
-    return MultiMopedHandlerHarness<DecodingTraits, T, MOPEDTypes...>{};
-  }
-};
-
-template <DecodingTraitsC DecodingTraits, typename T, typename... MOPEDTypes>
-struct MultiMopedHandlerHarness {
-  using HandlerT =
-      std::decay_t<decltype(getMOPEDHandlerForParser<DecodingTraits, T>())>;
-  using TailHandlersT = std::decay_t<
-      decltype(getMultiMopedHandlerHarness<DecodingTraits, MOPEDTypes...>())>;
-  HandlerT handler;
-  TailHandlersT tailHandlers;
-
-  template <typename TargetType> auto &getHandlerForType() {
-    if constexpr (std::is_same_v<TargetType, T>) {
-      return handler;
-    } else {
-      return tailHandlers.template getHandlerForType<TargetType>();
-    }
-  }
+      : HandlerBase{
+            MopedHandlerManager<MemberT, DecodingTraits>::getHandler()} {}
 };
 
 template <DecodingTraitsC DecodingTraits, typename... MOPEDTypes>
 constexpr auto
-getMultiMopedHandlerHarnessFromVariant(std::variant<MOPEDTypes...>) {
-  return getMultiMopedHandlerHarness<DecodingTraits, MOPEDTypes...>();
+getMultiTypeHandlerHarnessFromVariant(std::variant<MOPEDTypes...>) {
+  return AutoTypeSelectingParserHandler<
+      CandidateTypeHarness<DecodingTraits, MOPEDTypes...>>{};
 };
 
 template <is_variant VariantT, DecodingTraitsC DecodingTraits>
@@ -646,21 +549,64 @@ struct Handler<VariantT, DecodingTraits> : IMOPEDHandler<DecodingTraits> {
   using MemberType = VariantT;
   using MemberIdT = typename DecodingTraits::MemberIdType;
   using MultiMopedHandlerHarness =
-      std::decay_t<decltype(getMultiMopedHandlerHarnessFromVariant<
+      std::decay_t<decltype(getMultiTypeHandlerHarnessFromVariant<
                             DecodingTraits>(VariantT{}))>;
 
   using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
+
   Expected onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
-    return std::visit(
-        [this, &eventHandlerStack](auto &selected) {
-          using SelectedT = std::decay_t<decltype(selected)>;
-          auto &handler =
-              _handlerHarness.template getHandlerForType<SelectedT>();
-          handler.setTargetMember(selected);
-          return handler.onObjectStart(eventHandlerStack);
-        },
-        *_captureVariant);
+    if (_nestingLevel == 0) {
+      eventHandlerStack.push(this);
+    }
+    ++_nestingLevel;
+    return _handlerHarness.onObjectStart();
   }
+
+  Expected onObjectFinish(MOPEDHandlerStack &handlerStack) override {
+    --_nestingLevel;
+    auto result = _handlerHarness.onObjectFinish();
+    if (!result) {
+      _handlerHarness.reset();
+      return result;
+    }
+    if (_nestingLevel == 0) {
+      handlerStack.pop();
+      return _handlerHarness.applyHandler([this](auto &selected) {
+        *_captureVariant = selected;
+        _handlerHarness.reset();
+        return Expected{};
+      });
+    }
+    return Expected{};
+  }
+
+  Expected onMember(MOPEDHandlerStack &, MemberIdT memberId) override {
+    return _handlerHarness.onMember(memberId);
+  }
+
+  Expected onArrayStart(MOPEDHandlerStack &) {
+    return _handlerHarness.onArrayStart();
+  }
+
+  Expected onArrayFinish(MOPEDHandlerStack &) {
+    return _handlerHarness.onArrayFinish();
+  }
+
+  Expected onStringValue(std::string_view value) {
+    return _handlerHarness.onStringValue(value);
+  }
+
+  Expected onNumericValue(std::string_view value) {
+    return _handlerHarness.onNumericValue(value);
+  }
+
+  Expected onBooleanValue(bool value) {
+    return _handlerHarness.onBooleanValue(value);
+  }
+
+  Expected onNullValue() { return _handlerHarness.onNullValue(); }
+
+  Expected onRawBinary(void *) { return _handlerHarness.onNullValue(); }
 
   void applyEmitterContext(auto &emitterContext, MemberIdT memberId) {
     std::visit(
@@ -674,11 +620,12 @@ struct Handler<VariantT, DecodingTraits> : IMOPEDHandler<DecodingTraits> {
         *_captureVariant);
   }
 
-  void setTargetMember(MemberType &targetMember) {
+  void setTargetMember(VariantT &targetMember) {
     _captureVariant = &targetMember;
   }
 
 private:
+  int _nestingLevel{0};
   MultiMopedHandlerHarness _handlerHarness;
   VariantT *_captureVariant;
 };
@@ -776,9 +723,7 @@ struct MappedObjectParserEncoderDispatcher : IMOPEDHandler<DecodingTraits> {
     return setActiveMemberValue<0>(value);
   }
 
-  Expected onNullValue() override {
-    return applyNullValueToActiveMember<0>();
-  }
+  Expected onNullValue() override { return applyNullValueToActiveMember<0>(); }
 
   void setTargetMember(CaptureType &targetMember) {
     _captureObject = &targetMember;
@@ -809,6 +754,24 @@ struct MappedObjectParserEncoderDispatcher : IMOPEDHandler<DecodingTraits> {
       emitterContext.onObjectFinish();
     }
   }
+
+  template <typename BaseCaptureType, typename BaseMemberEventHandlerTuple>
+  auto operator+(MappedObjectParserEncoderDispatcher<
+                 BaseCaptureType, BaseMemberEventHandlerTuple, DecodingTraits>
+                     &&baseObjectParserEncoderDispatcher) {
+    static_assert(std::is_base_of_v<BaseCaptureType, CaptureType>,
+                  "Base capture type must be a base class of the derived "
+                  "capture type.");
+
+    using NewMemberEventHandlerTuple =
+        decltype(std::tuple_cat(std::declval<BaseMemberEventHandlerTuple>(),
+                                std::declval<MemberEventHandlerTuple>()));
+    return MappedObjectParserEncoderDispatcher<
+        CaptureType, NewMemberEventHandlerTuple, DecodingTraits>{std::tuple_cat(
+        baseObjectParserEncoderDispatcher.getHandlerTuple(), _handlerTuple)};
+  }
+
+  auto getHandlerTuple() { return _handlerTuple; }
 
 private:
   std::string_view _activeMemberName;
@@ -872,17 +835,19 @@ private:
       return std::unexpected("Parse error ... no active member available");
     } else {
       if (!_activeMemberOffset.has_value()) {
-        return std::unexpected(
-            "Parse error ... no active member available for current value null");   
+        return std::unexpected("Parse error ... no active member available for "
+                               "current value null");
       }
       if (MemberIndex == *_activeMemberOffset) {
-        auto &memberValue = std::get<MemberIndex>(_handlerTuple).getMember(*_captureObject);
-        if constexpr (IsOptionalC<std::decay_t<decltype(memberValue)>, DecodingTraits>) {
+        auto &memberValue =
+            std::get<MemberIndex>(_handlerTuple).getMember(*_captureObject);
+        if constexpr (IsOptionalC<std::decay_t<decltype(memberValue)>,
+                                  DecodingTraits>) {
           memberValue.reset();
           return {};
         } else {
-          return std::unexpected(
-              "Parse error ... null value not applicable for non-optional member");
+          return std::unexpected("Parse error ... null value not applicable "
+                                 "for non-optional member");
         }
       }
       return applyNullValueToActiveMember<MemberIndex + 1>();

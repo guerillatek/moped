@@ -2,8 +2,8 @@
 
 #include "JSONStreamParser.hpp"
 #include "JSONViewParser.hpp"
+#include "moped/CompositeParseEventDispatcher.hpp"
 #include "moped/concepts.hpp"
-#include "moped/moped.hpp"
 
 #include <type_traits>
 

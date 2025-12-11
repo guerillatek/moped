@@ -6,9 +6,7 @@
 #include <string>
 #include <time.h>
 #include <type_traits>
-
 #include "moped/ScaledInteger.hpp"
-
 #include "concepts.hpp"
 
 namespace moped {
