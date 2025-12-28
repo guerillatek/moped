@@ -11,7 +11,7 @@ namespace moped {
 template <IParserEventDispatchC ParseEventDispatchT>
 class YAMLParser : public ParserBase {
 public:
-  using ExpectedText = std::expected<std::string_view, std::string>;
+  using ExpectedText = std::expected<std::string_view, ParseError>;
 
   YAMLParser() {
     yaml_parser_initialize(&_parser);
@@ -39,8 +39,7 @@ public:
         input.size());
     while (true) {
       if (!parseYAMLEvent()) {
-        return std::unexpected(
-            std::format("YAML parse error: {}", getErrorText()));
+        return std::unexpected(ParseError{getErrorText()});
       }
       switch (_event.type) {
       case YAML_STREAM_START_EVENT:
@@ -155,7 +154,7 @@ private:
   yaml_event_t _event;
   ParseEventDispatchT _eventDispatch;
 
-  std::string getErrorText() {
+  const char* getErrorText() {
     switch (_parser.error) {
     case YAML_NO_ERROR:
       return "NO ERROR";
@@ -174,8 +173,7 @@ private:
     case YAML_EMITTER_ERROR:
       return "FAILED TO EMIT A YAML STREAM";
     };
-    return std::format("Unknown error error code ={}",
-                       std::to_underlying(_parser.error));
+    return "UNKNOWN ERROR";
   }
 };
 

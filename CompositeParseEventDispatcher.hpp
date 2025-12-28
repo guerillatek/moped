@@ -6,8 +6,6 @@
 #include <type_traits>
 namespace moped {
 
-using Expected = std::expected<void, std::string>;
-
 template <typename CompositeT, DecodingTraitsC DecodingTraits>
   requires IsMOPEDCompositeC<CompositeT, DecodingTraits>
 struct CompositeParserEventDispatcher {

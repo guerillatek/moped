@@ -14,8 +14,7 @@
 
 namespace moped {
 
-using Expected = std::expected<void, std::string>;
-using ExpectedText = std::expected<std::string, std::string>;
+using ExpectedText = std::expected<std::string, ParseError>;
 using ParseResult = CoParseResult<Expected>;
 
 template <IParserEventDispatchC ParseEventDispatchT>

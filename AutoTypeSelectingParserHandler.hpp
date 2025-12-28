@@ -29,9 +29,9 @@ template <DecodingTraitsC DecodingTraits, typename T> struct LastHarness {
   }
 
   Expected applyParseEvent(auto &&parseEvent, int &activeParticipants,
-                           std::vector<std::string> &errors) {
+                           std::vector<ParseError> &errors) {
     if (!_participating) {
-      return std::unexpected("No active parse candidate type at the moment");
+      return std::unexpected("No active  candidate type at the moment");
     }
     auto result = parseEvent(_candidateMopedHandler);
     if (!result) {
@@ -109,7 +109,7 @@ struct CandidateTypeHarness<DecodingTraits, T, TailTypes...> {
   }
 
   Expected applyParseEvent(auto &&parseEvent, int &activeParticipants,
-                           std::vector<std::string> &errors) {
+                           std::vector<ParseError> &errors) {
     if (!_participating) {
       return _tailingCandidates.applyParseEvent(parseEvent, activeParticipants,
                                                 errors);
@@ -311,7 +311,7 @@ public:
 
 private:
   bool _compositeSet{false};
-  std::vector<std::string> _errors;
+  std::vector<ParseError> _errors;
   CandidateHarnessT _candidateHarness;
 };
 

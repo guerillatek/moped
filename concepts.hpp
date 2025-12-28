@@ -3,17 +3,64 @@
 #include <chrono>
 #include <concepts>
 #include <expected>
+#include <format>
+#include <ostream>
 #include <stack>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
+namespace moped {
+
+struct ParseError {
+  const char *message;
+  std::variant<std::monostate, const char *, std::string, std::string_view,
+               char>
+      referenceValue;
+
+  ParseError(const char *msg)
+      : message(msg), referenceValue(std::monostate{}) {}
+  ParseError(const char *msg, const char *refValue)
+      : message(msg), referenceValue(refValue) {}
+  ParseError(const char *msg, const std::string &refValue)
+      : message(msg), referenceValue(refValue) {}
+  ParseError(const char *msg, std::string_view refValue)
+      : message(msg), referenceValue(refValue) {}
+  ParseError(const char *msg, char refValue)
+      : message(msg), referenceValue(refValue) {}
+
+  friend std::string to_string(const ParseError &err) {
+    return std::visit(
+        [&](auto &arg) -> std::string {
+          using T = std::decay_t<decltype(arg)>;
+          if constexpr (std::is_same_v<T, std::monostate>) {
+            return std::string(err.message);
+          } else {
+            return std::format("Parse error: {} - '{}'", err.message, arg);
+          }
+        },
+        err.referenceValue);
+  }
+
+  friend std::ostream &operator<<(std::ostream &os, const ParseError &err) {
+    os << to_string(err);
+    return os;
+  }
+};
+} // namespace moped
+template <>
+struct std::formatter<moped::ParseError> : std::formatter<std::string> {
+  auto format(const moped::ParseError &err, std::format_context &ctx) const {
+    return std::formatter<std::string>::format(to_string(err), ctx);
+  }
+};
 
 namespace moped {
 
-using Expected = std::expected<void, std::string>;
+using Expected = std::expected<void, ParseError>;
 using TimePoint = std::chrono::system_clock::time_point;
 
 template <typename T>

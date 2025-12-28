@@ -31,7 +31,7 @@ template <DecodingTraitsC DecodingTraits, typename T> struct LastHarness {
   Expected applyParseEvent(auto &&parseEvent, int &activeParticipants,
                            std::vector<std::string> &errors) {
     if (!_participating) {
-      return std::unexpected("No active parse candidate type at the moment");
+      return std::unexpected("No active candidate type at the moment");
     }
     auto result = parseEvent(_candidateMopedHandler);
     if (!result) {

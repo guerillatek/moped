@@ -85,7 +85,7 @@ public:
   };
 
 private:
-  using ExpectedText = std::expected<std::string, std::string>;
+  using ExpectedText = std::expected<std::string, ParseError>;
   using ValidatorStack = std::stack<char>;
 
   ParseEventDispatchT _eventDispatch;
@@ -466,7 +466,7 @@ private:
         std::format("Invalid numeric value {}", _reusableBuffer));
   }
 
-  std::awaitable<std::expected<std::optional<bool>, std::string>>
+  std::awaitable<std::expected<std::optional<bool>, ParseError>>
   getNullBooleanValueAsync() {
     if (_partialState == PartialState::BooleanValue) {
       _reusableBuffer = _partialBuffer;

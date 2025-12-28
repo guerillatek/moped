@@ -64,7 +64,7 @@ template <IParserEventDispatchC ParseEventDispatchT> class BoostInfoTreeParser {
   }
 
 public:
-  using Expected = std::expected<void, std::string>;
+  using Expected = std::expected<void, ParseError>;
 
   Expected parseInfoTreeFromString(const std::string &infoTreeText) {
     std::stringstream ss(infoTreeText);

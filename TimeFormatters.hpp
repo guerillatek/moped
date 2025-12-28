@@ -1,4 +1,6 @@
 #pragma once
+#include "concepts.hpp"
+#include "moped/ScaledInteger.hpp"
 #include <chrono>
 #include <cstring>
 #include <expected>
@@ -6,8 +8,6 @@
 #include <string>
 #include <time.h>
 #include <type_traits>
-#include "moped/ScaledInteger.hpp"
-#include "concepts.hpp"
 
 namespace moped {
 
@@ -20,13 +20,13 @@ public:
     return std::to_string(fractionalUnits.count());
   }
 
-  static std::expected<TimePoint, std::string>
+  static std::expected<TimePoint, ParseError>
   getTimeValue(is_integral auto input) {
     using namespace std::chrono;
     return TimePoint{FractionalDurationT{input}};
   }
 
-  static std::expected<TimePoint, std::string> getTimeValue(auto src) {
+  static std::expected<TimePoint, ParseError> getTimeValue(auto src) {
     auto input = std::string_view(std::begin(src), std::end(src));
     // Make sure the input is numeric
     if (input.empty() || !std::all_of(input.begin(), input.end(),
@@ -58,7 +58,7 @@ public:
 template <typename FractionalDurationT = std::chrono::milliseconds>
 class ISO8601Formatter {
 public:
-  static std::expected<TimePoint, std::string> getTimeValue(auto src) {
+  static std::expected<TimePoint, ParseError> getTimeValue(auto src) {
     auto input = std::string_view{src};
     std::tm tm = {};
     // Parse date and time (YYYY-MM-DDTHH:MM:SS)
@@ -108,8 +108,9 @@ public:
       } else {
         if (frac_len > expectedFractionalDigits) {
           return std::unexpected(
-              std::format("Too many fractional digits: expected max {}, got {}",
-                          expectedFractionalDigits, frac_len));
+              ParseError{"Too many fractional digits",
+                         std::format(" expected max {}, got {}",
+                                     expectedFractionalDigits, frac_len)});
         }
       }
 

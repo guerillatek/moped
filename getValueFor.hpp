@@ -14,31 +14,31 @@
 namespace moped {
 
 template <typename NumericT>
-inline std::expected<NumericT, std::string> ston(std::string_view value) {
+inline std::expected<NumericT, ParseError> ston(std::string_view value) {
   NumericT result;
   auto [ptr, ec] =
       std::from_chars(value.data(), value.data() + value.size(), result);
   if (ec != std::errc{}) {
-    return std::unexpected(
-        std::format("Failed to convert '{}' to numeric", value));
+    return std::unexpected{ParseError{"Failed to convert value to numeric type",
+                                      std::format("{}", value)}};
   }
   return result;
 }
 
 template <typename TargetT, typename DecodingTraits>
-std::expected<TargetT, std::string> getValueFor(std::string_view value) {
+std::expected<TargetT, ParseError> getValueFor(std::string_view value) {
   if constexpr (std::is_same_v<TargetT, bool>) {
     if (value == "true" || value == "1") {
       return true;
     } else if (value == "false" || value == "0") {
       return false;
     } else {
-      return std::unexpected("Invalid boolean value: " + std::string{value});
+      return std::unexpected(ParseError{"Invalid boolean value", value});
     }
   } else if constexpr (std::is_same_v<TargetT, TimePoint>) {
     auto epochTime = DecodingTraits::TimePointFormaterT::getTimeValue(value);
     if (!epochTime) {
-      throw std::runtime_error(epochTime.error());
+      return std::unexpected{epochTime.error()};
     }
     return epochTime.value();
   } else if constexpr (std::is_same_v<TargetT, std::string> ||
@@ -62,17 +62,18 @@ std::expected<TargetT, std::string> getValueFor(std::string_view value) {
     try {
       return TargetT{value};
     } catch (const std::exception &e) {
-      return std::unexpected(std::format(
-          "Failed to convert '{}' to mapped enum: {}", value, e.what()));
+      return std::unexpected{ParseError{
+          "Failed conversion ",
+          std::format("from '{}' to mapped enum: {}", value, e.what())}};
     }
   } else {
-    return std::unexpected("Unsupported type for value conversion: " +
-                           std::string(typeid(TargetT).name()));
+    return std::unexpected(ParseError{"Unsupported type for value conversion",
+                                      std::string(typeid(TargetT).name())});
   }
 }
 
 template <typename TargetT, typename DecodingTraits>
-std::expected<bool, std::string> getValueFor(bool value) {
+std::expected<bool, ParseError> getValueFor(bool value) {
   return value;
 }
 

@@ -13,7 +13,7 @@ namespace moped {
 template <IParserEventDispatchC ParseEventDispatchT>
 class JSONViewParser : public ParserBase {
   using Iterator = std::string_view::const_iterator;
-  using ExpectedText = std::expected<std::string_view, std::string>;
+  using ExpectedText = std::expected<std::string_view, ParseError>;
 
   ParseEventDispatchT &_eventDispatch;
 
@@ -81,7 +81,28 @@ public:
     Iterator it = json.begin(), end = json.end();
 
     skipWhitespace(it, end);
-    if (it == end || *it != '{')
+
+    bool usingRootArray = false;
+    if (*it == '[') {
+      usingRootArray = true;
+      // Root array documents require specialize moped mappings
+      // where a class object must contain a single member mapping
+      // with and empty string collection type member.
+      vs.push('{');
+      auto result = _eventDispatch.onObjectStart();
+      if (!result) {
+        return result; // Both are Expected, return directly
+      }
+      result = _eventDispatch.onMember("");
+      if (!result) {
+        return std::unexpected{
+            "JSON documents with root arrays require specialize moped mappings "
+            "whereby the top level class object must contain a single member "
+            "mapping with "
+            "associating and and empty string (\"\") to a class member that "
+            "maps to a moped collection"};
+      }
+    } else if (it == end || *it != '{')
       return std::unexpected("Expected object start '{'");
     vs.push(*it++);
 
@@ -179,10 +200,10 @@ public:
             }
           } else {
             return std::unexpected(
-                std::format("Invalid unquoted non numeric string, only "
-                            "'true', 'false', and "
-                            "'null' are valid RFC 7159 values'{}'",
-                            nullBoolText));
+                ParseError("Invalid unquoted non numeric string, only "
+                           "'true', 'false', and "
+                           "'null' are valid RFC 7159 values",
+                           nullBoolText));
           }
         } break;
         case ']':
@@ -233,6 +254,14 @@ public:
           }
 
           vs.pop();
+          if (usingRootArray && vs.size() == 1 && vs.top() == '{') {
+            // Finish the root object
+            auto objectFinishResult = _eventDispatch.onObjectFinish();
+            if (!objectFinishResult) {
+              return objectFinishResult; // Both are Expected, return directly
+            }
+            vs.pop();
+          }
           break;
         }
         case '}': {

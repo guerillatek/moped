@@ -95,6 +95,10 @@ public:
 
   auto getEnumValue() const { return _value; }
 
+  static auto from_string(std::string_view str) const {
+    return findValueForString<0>(str);
+  }
+
 private:
   template <std::size_t index = 0>
   static std::optional<std::string_view> findStringForValue(EnumT value) {

@@ -92,7 +92,7 @@ TEST_CASE("Instrument Data load Test with streaming parser and  "
                 return {};
               }});
   if (!result) {
-    FAIL(result.error().c_str());
+    FAIL(result.error());
   }
   const ExchangeInfoWithSymbolDispatch &info = result.value();
 

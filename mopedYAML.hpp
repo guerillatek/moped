@@ -6,7 +6,7 @@ namespace moped {
 
 template <typename CompositeT, typename TimeFormatterT, typename... Args>
   requires IsMOPEDCompositeC<CompositeT, StringDecodingTraits<TimeFormatterT>>
-std::expected<CompositeT, std::string>
+std::expected<CompositeT, ParseError>
 parseCompositeFromYAMLView(TimeFormatterT, std::string_view yamlView,
                            Args &&...args) {
   using DispatcherT =

@@ -58,6 +58,14 @@ public:
     return _rawIntegerValue < rhs._rawIntegerValue;
   }
 
+  bool operator<=(const ScaledInteger &rhs) const {
+    return _rawIntegerValue <= rhs._rawIntegerValue;
+  }
+
+  bool operator>=(const ScaledInteger &rhs) const {
+    return _rawIntegerValue >= rhs._rawIntegerValue;
+  }
+
   bool operator==(const ScaledInteger &rhs) const {
     return _rawIntegerValue == rhs._rawIntegerValue;
   }

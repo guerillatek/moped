@@ -47,12 +47,14 @@ struct Handler<MemberT, DecodingTraits>
   using MemberType = MemberT;
   using ValueType = typename MemberT::value_type;
   static constexpr bool HasCompositeValueType =
-      IsMOPEDCompositeC<typename MemberT::value_type, DecodingTraits>;
+      IsMOPEDCompositeC<typename MemberT::value_type, DecodingTraits> ||
+      is_variant<typename MemberT::value_type>;
   using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
 
   Expected onMember(MOPEDHandlerStack &, MemberIdType) override {
-    return std::unexpected("Parse error!!! onObjectFinish event not expected"
-                           " in collection handler");
+    return std::unexpected(
+        "Parse error!!! onMember parse event not expected"
+        " in collection handler. Failed to push value hander on parse stack");
   }
 
   Expected onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
@@ -425,11 +427,11 @@ struct Handler<MemberT, DecodingTraits>
       auto entryResult = _targetCollection->emplace(_currentKey, MappedType{});
 
       if constexpr (requires {
-                      this->_valueTypeHandler.setTargetMember(entryResult.first->second);
+                      this->_valueTypeHandler.setTargetMember(
+                          entryResult.first->second);
                     }) {
         this->_valueTypeHandler.setTargetMember(entryResult.first->second);
-      }
-      else {
+      } else {
         this->_valueTypeHandler.setTargetMember(entryResult->second);
       }
       return this->_valueTypeHandler.onObjectStart(eventHandlerStack);
@@ -782,7 +784,7 @@ private:
       // Failed parse ... no member found
       _activeMemberOffset.reset();
       return std::unexpected(
-          std::format("Member, '{}' not found in MOPED handler", memberId));
+          ParseError{"Member not found in MOPED handler", memberId});
     } else {
       auto &nameHandler = std::get<MemberIndex>(_handlerTuple);
       if (nameHandler.memberId == memberId) {
@@ -818,9 +820,9 @@ private:
       return std::unexpected("Parse error ... no active member available");
     } else {
       if (!_activeMemberOffset.has_value()) {
-        return std::unexpected(std::format(
-            "Parse error ... no active member available for current value {}",
-            value));
+        return std::unexpected(
+            ParseError{"No active member available for current value",
+                       std::format("{}", value)});
       }
       if (MemberIndex == *_activeMemberOffset) {
         return std::get<MemberIndex>(_handlerTuple)

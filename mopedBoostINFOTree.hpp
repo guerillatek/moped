@@ -6,7 +6,7 @@ namespace moped {
 
 template <typename CompositeT, typename... Args>
   requires IsMOPEDCompositeC<CompositeT, StringMemberIdTraits>
-std::expected<CompositeT, std::string>
+std::expected<CompositeT, ParseError>
 parseCompositeFromBoostInfoFile(std::string filePath, Args &&...args) {
   using DispatcherT =
       CompositeParserEventDispatcher<CompositeT, StringMemberIdTraits>;

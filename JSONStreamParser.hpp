@@ -11,20 +11,17 @@
 #include <string>
 
 namespace moped {
-
-using Expected = std::expected<void, std::string>;
-
 template <IParserEventDispatchC ParseEventDispatchT>
 class JSONStreamParser : public ParserBase {
 
-  using ExpectedText = std::expected<std::string, std::string>;
+  using ExpectedText = std::expected<std::string, ParseError>;
 
   ExpectedText getMemberText(std::istream &is) {
     char c;
     is >> c;
     if (c != '"') {
-      return std::unexpected(std::format(
-          "Expected open quote for a member definition, '\"' but got {}", c));
+      return std::unexpected{ParseError{
+          "Expected open quote for a member definition, '\"' but got", c}};
     }
 
     _reusableBuffer.clear();
@@ -32,9 +29,9 @@ class JSONStreamParser : public ParserBase {
       _reusableBuffer += is.get();
     }
     if (!is) {
-      return std::unexpected(
-          std::format("Missing closing quote, '\"' for member start at {}",
-                      _reusableBuffer));
+      return std::unexpected{
+          ParseError{"Missing closing quote, '\"' for member start at {}",
+                     _reusableBuffer}};
     }
 
     is.get(); // flush end quote
@@ -42,8 +39,8 @@ class JSONStreamParser : public ParserBase {
       return _reusableBuffer;
     }
 
-    return std::unexpected(
-        std::format("Invalid member identifier {}", _reusableBuffer));
+    return std::unexpected{
+        ParseError{"Invalid member identifier", _reusableBuffer.data()}};
   }
 
   ExpectedText getStringValueText(std::istream &ss) {
@@ -64,8 +61,8 @@ class JSONStreamParser : public ParserBase {
       }
       return _reusableBuffer;
     }
-    return std::unexpected(std::format(
-        "String value='{}' missing closing quote,\"", _reusableBuffer));
+    return std::unexpected{ParseError{
+        "String value='{}' missing closing quote,\"", _reusableBuffer.data()}};
   }
 
   ExpectedText getNumericValueText(std::istream &is) {
@@ -76,8 +73,8 @@ class JSONStreamParser : public ParserBase {
     if (isNumeric(_reusableBuffer)) {
       return _reusableBuffer;
     }
-    return std::unexpected(
-        std::format("Invalid numeric value {}", _reusableBuffer));
+    return std::unexpected{
+        ParseError{"Invalid numeric value", _reusableBuffer.data()}};
   }
 
   ParseEventDispatchT &_eventDispatch;
@@ -94,9 +91,29 @@ public:
     ss >> std::ws;
     ss >> c;
 
-    if (c != '{') {
+    bool usingRootArray = false;
+    if (c == '[') {
+      usingRootArray = true;
+      // Root array documents require specialize moped mappings
+      // where a class object must contain a single member mapping
+      // with and empty string collection type member.
+      vs.push('{');
+      auto result = _eventDispatch.onObjectStart();
+      if (!result) {
+        return result; // Both are Expected, return directly
+      }
+      result = _eventDispatch.onMember("");
+      if (!result) {
+        return std::unexpected{
+            "JSON documents with root arrays require specialize moped mappings "
+            "whereby the top level class object must contain a single member "
+            "mapping with "
+            "associating and and empty string (\"\") to a class member that "
+            "maps to a moped collection"};
+      }
+    } else if (c != '{') {
       return std::unexpected(
-          std::format("Expected an object start, '{{' but got {}", c));
+          ParseError{"Expected an object start, '{' but got ", c});
     }
     vs.push(c);
 
@@ -113,8 +130,8 @@ public:
       case Object: {
         ss >> c;
         if (c != '{') {
-          return std::unexpected(
-              std::format("Expected an object start, '{{' but got {}", c));
+          return std::unexpected{
+              ParseError{"Expected an object start, '{' but got ", c}};
         }
 
         auto objectStartResult = _eventDispatch.onObjectStart();
@@ -129,13 +146,13 @@ public:
       case MemberName: {
         auto expectedText = getMemberText(ss);
         if (!expectedText) {
-          return std::unexpected(std::format("{}", expectedText.error()));
+          return std::unexpected(expectedText.error());
         }
         ss >> std::ws;
         ss >> c;
         if (c != ':') {
-          return std::unexpected(
-              std::format("Expected ':' in member definition but got {}", c));
+          return std::unexpected{
+              ParseError{"Expected ':' in member definition but got", c}};
         }
         parseState = ParseState::OpenValue;
 
@@ -165,8 +182,7 @@ public:
           ss.get(); // consume the opening quote
           auto expectedText = getStringValueText(ss);
           if (!expectedText) {
-            return std::unexpected(
-                std::format("{} in jsonText", expectedText.error()));
+            return std::unexpected{expectedText.error()};
           }
 
           auto stringValueResult =
@@ -179,30 +195,41 @@ public:
         case 't':
         case 'f': {
           // Boolean values
-          std::string nullBoolText;
+          char nullBoolText[64];
+          size_t index = 0;
           while (ss && isalpha(ss.peek())) {
-            nullBoolText += ss.get();
+            nullBoolText[index++] = ss.get();
+            if (index == (sizeof(nullBoolText) - 1)) {
+              nullBoolText[index] = '\0';
+              std::unexpected{ParseError{
+                  "Invalid unquoted non numeric string, only "
+                  "'true', 'false', and "
+                  "'null' are valid RFC 7159 values ... parser found",
+                  std::string_view{nullBoolText}}};
+            }
           }
-          if (nullBoolText == "true") {
+          nullBoolText[index] = '\0';
+          std::string_view capturedText{nullBoolText};
+          if (capturedText == "true") {
             auto boolResult = _eventDispatch.onBooleanValue(true);
             if (!boolResult) {
               return boolResult; // Both are Expected, return directly
             }
-          } else if (nullBoolText == "false") {
+          } else if (capturedText == "false") {
             auto boolResult = _eventDispatch.onBooleanValue(false);
             if (!boolResult) {
               return boolResult; // Both are Expected, return directly
             }
-          } else if (nullBoolText == "null") {
+          } else if (capturedText == "null") {
             auto nullResult = _eventDispatch.onNullValue();
             if (!nullResult) {
               return nullResult; // Both are Expected, return directly
             } else {
-              return std::unexpected(
-                  std::format("Invalid unquoted non numeric string, only "
-                              "'true', 'false', and "
-                              "'null' are valid RFC 7159 values'{}'",
-                              nullBoolText));
+              return std::unexpected{ParseError{
+                  "Invalid unquoted non numeric string, only "
+                  "'true', 'false', and "
+                  "'null' are valid RFC 7159 values ... parser found",
+                  capturedText}};
             }
           }
         } break;
@@ -213,7 +240,7 @@ public:
         default: {
           auto expectedText = getNumericValueText(ss);
           if (!expectedText) {
-            return std::unexpected(std::format("{}", expectedText.error()));
+            return std::unexpected(expectedText.error());
           }
 
           auto numericResult =
@@ -249,8 +276,8 @@ public:
         } break;
         case ']': {
           if (vs.top() != '[') {
-            return std::unexpected(
-                std::format("Invalid json parse, unexpected character, {}", c));
+            return std::unexpected{
+                ParseError{"Invalid json parse, unexpected character", c}};
           }
 
           auto arrayFinishResult = _eventDispatch.onArrayFinish();
@@ -259,11 +286,20 @@ public:
           }
 
           vs.pop();
+          // If this was a root array, we need to close the root object
+          if (usingRootArray && vs.size() == 1 && vs.top() == '{') {
+            // Finish the root object
+            auto objectFinishResult = _eventDispatch.onObjectFinish();
+            if (!objectFinishResult) {
+              return objectFinishResult; // Both are Expected, return directly
+            }
+            vs.pop();
+          }
         } break;
         case '}': {
           if (vs.top() != '{') {
-            return std::unexpected(
-                std::format("Invalid json parse, unexpected character, {}", c));
+            return std::unexpected{
+                ParseError{"Invalid json parse, unexpected character", c}};
           }
 
           auto objectFinishResult = _eventDispatch.onObjectFinish();

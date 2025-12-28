@@ -106,9 +106,9 @@ private:
         return selectTypeForAssignedValue<I + 1>(value);
       }
     }
-    return std::unexpected(
-        std::format("No type selected for member {} with value {}",
-                    PivotMapT::pivot_member, value));
+    return std::unexpected{ParseError{
+        "No type selected for member",
+        std::format("{} with value {}", PivotMapT::pivot_member, value)}};
   }
 
   ParseHandlerT &_parserHandler;
