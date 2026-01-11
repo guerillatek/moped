@@ -76,6 +76,10 @@ public:
       : _eventDispatch(eventDispatch) {}
 
   Expected parse(std::string_view json) {
+
+    enum class ParseState { MemberName, OpenValue, Object, Array, CloseValue };
+    ParseState parseState = ParseState::MemberName;
+
     using ValidatorStack = std::stack<char>;
     ValidatorStack vs;
     Iterator it = json.begin(), end = json.end();
@@ -102,17 +106,18 @@ public:
             "associating and and empty string (\"\") to a class member that "
             "maps to a moped collection"};
       }
-    } else if (it == end || *it != '{')
-      return std::unexpected("Expected object start '{'");
-    vs.push(*it++);
+      parseState = ParseState::OpenValue;
 
-    auto objectStartResult = _eventDispatch.onObjectStart();
-    if (!objectStartResult) {
-      return objectStartResult; // Both are Expected, return directly
+    } else {
+      if (it == end || *it != '{') {
+        return std::unexpected("Expected object start '{'");
+      }
+      vs.push(*it++);
+      auto objectStartResult = _eventDispatch.onObjectStart();
+      if (!objectStartResult) {
+        return objectStartResult; // Both are Expected, return directly
+      }
     }
-
-    enum class ParseState { MemberName, OpenValue, Object, Array, CloseValue };
-    ParseState parseState = ParseState::MemberName;
 
     while (!vs.empty()) {
       skipWhitespace(it, end);
@@ -139,7 +144,6 @@ public:
           return std::unexpected("Expected ':' after member name");
         ++it; // skip ':'
         parseState = ParseState::OpenValue;
-
         auto memberResult = _eventDispatch.onMember(expectedText.value());
         if (!memberResult) {
           return memberResult; // Both are Expected, return directly

@@ -234,6 +234,11 @@ concept IsMOPEDMapCollectionC = requires(T t) {
             std::declval<typename T::mapped_type>());
 };
 
+template <typename T>
+concept IsMOPEDInsertCollectionC = requires(T t) {
+  { t.insert(std::declval<typename T::value_type>()) };
+} && !IsMOPEDMapCollectionC<T>;
+
 template <typename T> struct is_std_array : std::false_type {};
 
 template <typename T, std::size_t N>
@@ -247,18 +252,14 @@ template <typename T>
 concept is_array = std::is_array_v<T> || is_std_array_v<T>;
 
 template <typename T>
-concept IsMOPEDContentCollectionC = IsMOPEDPushCollectionC<T> || is_array<T>;
+concept IsMOPEDContentCollectionC =
+    IsMOPEDPushCollectionC<T> || IsMOPEDInsertCollectionC<T> || is_array<T>;
 
 template <typename T, typename DecodingTraits>
 concept IsOptionalC = requires(T t) {
   { t.has_value() } -> std::same_as<bool>;
   { t.value() } -> std::same_as<typename T::value_type &>;
 } && IsMOPEDContentC<typename T::value_type, DecodingTraits>;
-
-template <typename T, typename DecodingTraits>
-concept IsMOPEDTypeC =
-    IsMOPEDContentC<T, DecodingTraits> || IsMOPEDContentCollectionC<T> ||
-    IsOptionalC<T, DecodingTraits> || IsMOPEDCompositeDispatcherC<T>;
 
 template <typename T>
 concept IsSettableVariantC = ISettableVariant(T{});

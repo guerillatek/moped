@@ -37,6 +37,10 @@ public:
     }
   }
 
+  ScaledInteger(const ScaledInteger &other) = default;
+  ScaledInteger &operator=(const ScaledInteger &other) = default;
+
+
   // Numeric conversions represent potential loss of information
   template <std::integral It> It toInteger() const {
     return static_cast<It>(_rawIntegerValue) / Scale;

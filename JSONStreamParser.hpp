@@ -86,6 +86,7 @@ public:
   Expected parse(std::istream &ss) {
     using ValidatorStack = std::stack<char>;
     ValidatorStack vs;
+    ParseState parseState = ParseState::MemberName;
 
     char c;
     ss >> std::ws;
@@ -111,18 +112,18 @@ public:
             "associating and and empty string (\"\") to a class member that "
             "maps to a moped collection"};
       }
-    } else if (c != '{') {
-      return std::unexpected(
-          ParseError{"Expected an object start, '{' but got ", c});
+      parseState = ParseState::OpenValue;
+    } else {
+      if (c != '{') {
+        return std::unexpected(
+            ParseError{"Expected an object start, '{' but got ", c});
+      }
+      vs.push(c);
+      auto objectStartResult = _eventDispatch.onObjectStart();
+      if (!objectStartResult) {
+        return objectStartResult; // Both are Expected, return directly
+      }
     }
-    vs.push(c);
-
-    auto objectStartResult = _eventDispatch.onObjectStart();
-    if (!objectStartResult) {
-      return objectStartResult; // Both are Expected, return directly
-    }
-
-    ParseState parseState = ParseState::MemberName;
 
     while (!vs.empty()) {
       char c;

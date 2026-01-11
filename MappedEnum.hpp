@@ -95,7 +95,7 @@ public:
 
   auto getEnumValue() const { return _value; }
 
-  static auto from_string(std::string_view str) const {
+  static auto from_chars(std::string_view str) {
     return findValueForString<0>(str);
   }
 

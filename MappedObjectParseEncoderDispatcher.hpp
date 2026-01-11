@@ -51,10 +51,11 @@ struct Handler<MemberT, DecodingTraits>
       is_variant<typename MemberT::value_type>;
   using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
 
-  Expected onMember(MOPEDHandlerStack &, MemberIdType) override {
-    return std::unexpected(
+  Expected onMember(MOPEDHandlerStack &, MemberIdType member) override {
+    return std::unexpected{ParseError{
         "Parse error!!! onMember parse event not expected"
-        " in collection handler. Failed to push value hander on parse stack");
+        " in collection handler. Failed to push value hander on parse stack",
+        member}};
   }
 
   Expected onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
@@ -137,6 +138,113 @@ private:
     return {};
   }
 
+  MemberT *_targetCollection;
+};
+
+template <IsMOPEDInsertCollectionC MemberT, DecodingTraitsC DecodingTraits>
+struct Handler<MemberT, DecodingTraits>
+    : IMOPEDHandler<DecodingTraits>,
+      ValueHandlerBase<typename MemberT::value_type, DecodingTraits> {
+  using MemberIdType = typename DecodingTraits::MemberIdType;
+
+  using MemberType = MemberT;
+  using ValueType = typename MemberT::value_type;
+  static constexpr bool HasCompositeValueType =
+      IsMOPEDCompositeC<typename MemberT::value_type, DecodingTraits>;
+  using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
+
+  Expected onMember(MOPEDHandlerStack &, MemberIdType memberId) override {
+    return std::unexpected{ParseError{
+        "Parse error!!! onMember parse event not expected"
+        " in collection handler. Failed to push value hander on parse stack",
+        memberId}};
+  }
+
+  Expected onObjectStart(MOPEDHandlerStack &eventHandlerStack) override {
+    if constexpr (HasCompositeValueType) {
+      std::destroy_at<ValueType>(&_reusableValue);
+      std::construct_at<ValueType>(&_reusableValue);
+      this->_valueTypeHandler.setTargetMember(_reusableValue);
+      return this->_valueTypeHandler.onObjectStart(eventHandlerStack);
+    }
+    return {};
+  }
+
+  Expected onObjectFinish(MOPEDHandlerStack &) override {
+    return std::unexpected("Parse error!!! onObjectFinish event not expected"
+                           " in collection handler");
+  }
+
+  Expected onArrayStart(MOPEDHandlerStack &handlerStack) override {
+    if (handlerStack.empty()) {
+      return std::unexpected("Parse error!!! onArrayStart event not expected"
+                             " in collection handler");
+    }
+    if (handlerStack.top() == this) {
+      if constexpr (is_array<ValueType> || IsMOPEDPushCollectionC<ValueType>) {
+        this->_valueTypeHandler.setTargetMember(
+            _targetCollection->emplace_back());
+        return this->_valueTypeHandler.onArrayStart(handlerStack);
+      } else {
+        return std::unexpected(
+            "Parse error!!! onArrayStart event not expected in collection "
+            "with non collection value types");
+      }
+    }
+    handlerStack.push(this);
+    return {};
+  }
+
+  Expected onArrayFinish(MOPEDHandlerStack &handlerStack) override {
+    if constexpr (HasCompositeValueType) {
+      _targetCollection->insert(std::move(_reusableValue));
+    }
+    handlerStack.pop();
+    return {};
+  }
+
+  Expected onStringValue(std::string_view value) override {
+    return HandleScalarValue(value);
+  }
+
+  Expected onNumericValue(std::string_view value) override {
+    return HandleScalarValue(value);
+  }
+
+  void setTargetMember(MemberT &targetMember) {
+    _targetCollection = &targetMember;
+  }
+
+  void applyEmitterContext(auto &emitterContext, MemberIdType memberId) {
+    emitterContext.onArrayStart(memberId, _targetCollection->size());
+
+    for (auto &item : *_targetCollection) {
+      if constexpr (HasCompositeValueType) {
+        this->_valueTypeHandler.setTargetMember(item);
+        this->_valueTypeHandler.applyEmitterContext(emitterContext,
+                                                    std::nullopt);
+      } else {
+        emitterContext.onArrayValueEntry(item);
+      }
+    }
+    emitterContext.onArrayFinish();
+  }
+
+private:
+  Expected HandleScalarValue(std::string_view value) {
+    if constexpr (HasCompositeValueType) {
+      return std::unexpected(
+          "Parse error!!! No active composite handler to set value");
+    } else {
+      auto result = getValueFor<ValueType, DecodingTraits>(value);
+      if (!result) {
+        return std::unexpected(result.error());
+      }
+      _targetCollection->insert(result.value());
+    }
+    return {};
+  }
+  ValueType _reusableValue{};
   MemberT *_targetCollection;
 };
 

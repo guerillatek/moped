@@ -182,6 +182,8 @@ class JSONSAsyncStreamParser : public ParserBase {
 public:
   ParseResult parseInputStream() {
     using ValidatorStack = std::stack<char>;
+    ParseState parseState = ParseState::MemberName;
+    bool usingRootArray = false;
     ValidatorStack vs;
     char c;
     if (auto result = co_await coWaitForValidStream(
@@ -194,6 +196,28 @@ public:
       co_return std::unexpected(result.error());
     }
 
+    if (c == '[') {
+      usingRootArray = true;
+      // Root array documents require specialize moped mappings
+      // where a class object must contain a single member mapping
+      // with and empty string collection type member.
+      vs.push('{');
+      auto result = _eventDispatch.onObjectStart();
+      if (!result) {
+        return result; // Both are Expected, return directly
+      }
+      result = _eventDispatch.onMember("");
+      if (!result) {
+        return std::unexpected{
+            "JSON documents with root arrays require specialize moped mappings "
+            "whereby the top level class object must contain a single member "
+            "mapping with "
+            "associating and and empty string (\"\") to a class member that "
+            "maps to a moped collection"};
+      }
+      parseState = ParseState::OpenValue;
+    }
+
     if (c != '{') {
       co_return std::unexpected(
           std::format("Expected an object start, '{{' but got {}", c));
@@ -203,7 +227,6 @@ public:
     if (!result) {
       co_return std::unexpected(result.error());
     }
-    ParseState parseState = ParseState::MemberName;
 
     while (!vs.empty()) {
       char c;
@@ -318,7 +341,8 @@ public:
             }
           } else {
             co_return std::unexpected(
-                std::format("Invalid unquoted non numeric string, only 'true', 'false', and "
+                std::format("Invalid unquoted non numeric string, only 'true', "
+                            "'false', and "
                             "'null' are valid RFC 7159 values'{}'",
                             nullBoolText));
           }
@@ -372,6 +396,14 @@ public:
             co_return std::unexpected(result.error());
           }
           vs.pop();
+          if (usingRootArray && vs.size() == 1 && vs.top() == '{') {
+            // Finish the root object
+            auto objectFinishResult = _eventDispatch.onObjectFinish();
+            if (!objectFinishResult) {
+              return objectFinishResult; // Both are Expected, return directly
+            }
+            vs.pop();
+          }
         } break;
         case '}': {
           if (vs.top() != '{') {

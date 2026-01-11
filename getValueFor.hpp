@@ -50,6 +50,9 @@ std::expected<TargetT, ParseError> getValueFor(std::string_view value) {
                        (std::is_floating_point_v<TargetT>)) {
     return ston<TargetT>(value);
   } else if constexpr (IsOptionalC<TargetT, DecodingTraits>) {
+    if (value.empty()) {
+      return std::nullopt;
+    }
     auto result =
         getValueFor<typename TargetT::value_type, DecodingTraits>(value);
     if (!result) {
@@ -57,7 +60,8 @@ std::expected<TargetT, ParseError> getValueFor(std::string_view value) {
     }
     return result.value();
   } else if constexpr (is_scaled_int<TargetT>) {
-    return TargetT{value};
+    TargetT targetValue{value};
+    return targetValue;
   } else if constexpr (is_mapped_enum<TargetT>) {
     try {
       return TargetT{value};
