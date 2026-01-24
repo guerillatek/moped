@@ -214,7 +214,7 @@ concept IsMOPEDCompositeC = requires() {
 template <typename T, typename DecodingTraits>
 concept IsMOPEDContentC =
     IMOPEDHandlerC<T, DecodingTraits> || IsMOPEDValueC<T> ||
-    IsMOPEDCompositeC<T, DecodingTraits>;
+    IsMOPEDCompositeC<T, DecodingTraits> || is_variant<T>;
 
 template <typename T>
 concept IsMOPEDPushCollectionC = requires(T t) {

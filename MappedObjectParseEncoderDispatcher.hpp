@@ -973,13 +973,18 @@ private:
         return std::unexpected(
             "Parse error ... no active member available for current object");
       }
-      auto &nameHandler = std::get<MemberIndex>(_handlerTuple);
-      if constexpr (IMOPEDHandlerC<std::decay_t<decltype(nameHandler.handler)>,
-                                   DecodingTraits>) {
-        if (MemberIndex == *_activeMemberOffset) {
+      if (MemberIndex == *_activeMemberOffset) {
+        auto &nameHandler = std::get<MemberIndex>(_handlerTuple);
+        if constexpr (IMOPEDHandlerC<
+                          std::decay_t<decltype(nameHandler.handler)>,
+                          DecodingTraits>) {
+
           nameHandler.handler.setTargetMember(
               _captureObject->*(nameHandler.memberPtr));
           return handlerActionFunction(nameHandler.handler);
+        } else {
+          return std::unexpected(ParseError{
+              "Expected composite handler for member:", nameHandler.memberId});
         }
       }
       return dispatchForActiveMember<MemberIndex + 1>(
