@@ -31,7 +31,7 @@ template <const char *mappedName, auto enumVal, auto... Args> class MappedEnum {
 public:
   using EnumT = decltype(enumVal);
   MappedEnum() = default;
-  MappedEnum(EnumT value) : _value(value) {}
+  constexpr MappedEnum(EnumT value) : _value(value) {}
   MappedEnum(const std::string_view &str) {
     auto entry = findValueForString<0>(str);
     if (!entry) {
@@ -128,3 +128,10 @@ private:
 };
 
 } // namespace moped
+
+template <moped::is_mapped_enum T>
+struct std::formatter<T> : std::formatter<std::string> {
+  auto format(const T &mappedEnum, std::format_context &ctx) const {
+    return std::formatter<std::string>::format(to_string(mappedEnum), ctx);
+  }
+};

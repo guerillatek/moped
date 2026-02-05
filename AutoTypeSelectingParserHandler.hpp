@@ -66,6 +66,14 @@ template <DecodingTraitsC DecodingTraits, typename T> struct LastHarness {
       _participating = false;
     }
   }
+
+  template <typename CandidateT> auto &getMopedHandler() {
+    if constexpr (std::is_same_v<CandidateT, T>) {
+      return _candidateMopedHandler.getMopedHandler();
+    } else {
+      throw std::runtime_error("Invalid candidate type for handler retrieval");
+    }
+  }
 };
 
 template <typename DecodingTraits, typename T, typename... TailTypes>
@@ -139,6 +147,14 @@ struct CandidateTypeHarness<DecodingTraits, T, TailTypes...> {
       return _tailingCandidates.applyHandler(handlerFunc);
     }
     return handlerFunc(_candidateMopedHandler.getComposite());
+  }
+
+  template <typename CandidateT> auto &getMopedHandler() {
+    if constexpr (std::is_same_v<CandidateT, T>) {
+      return _candidateMopedHandler.getMopedHandler();
+    } else {
+      return _tailingCandidates.template getMopedHandler<CandidateT>();
+    }
   }
 };
 
@@ -307,6 +323,19 @@ public:
   template <typename SetT> void setActiveComposite() {
     _candidateHarness.template setActiveComposite<SetT>();
     _compositeSet = true;
+  }
+
+  auto applyParseEvent(auto &&parseEvent) {
+    return _candidateHarness.applyParseEvent(parseEvent);
+  }
+
+  using MemberIdT = typename DecodingTraits::MemberIdType;
+  void applyEmiterContext(auto &candidateSource, auto &emitterContext,
+                          std::optional<MemberIdT> memberId = std::nullopt) {
+    using CandidateT = std::decay_t<decltype(candidateSource)>;
+    auto &handler = _candidateHarness.template getMopedHandler<CandidateT>();
+    handler.setTargetMember(candidateSource);
+    handler.applyEmitterContext(emitterContext, memberId);
   }
 
 private:

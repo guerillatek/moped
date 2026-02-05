@@ -718,14 +718,14 @@ struct Handler<VariantT, DecodingTraits> : IMOPEDHandler<DecodingTraits> {
 
   Expected onRawBinary(void *) { return _handlerHarness.onNullValue(); }
 
-  void applyEmitterContext(auto &emitterContext, MemberIdT memberId) {
+  void applyEmitterContext(auto &emitterContext,
+                           std::optional<MemberIdT> memberId = std::nullopt) {
     std::visit(
         [this, &emitterContext, &memberId](auto &selected) {
           using SelectedT = std::decay_t<decltype(selected)>;
-          auto &handler =
-              _handlerHarness.template getHandlerForType<SelectedT>();
-          handler.setTargetMember(selected);
-          handler.applyEmitterContext(emitterContext, memberId);
+          _handlerHarness.template setActiveComposite<SelectedT>();
+          _handlerHarness.applyEmiterContext(selected, emitterContext,
+                                             memberId);
         },
         *_captureVariant);
   }

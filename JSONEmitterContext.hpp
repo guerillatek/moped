@@ -125,9 +125,9 @@ void encodeToJSONStream(const T &mopedObject, std::ostream &output,
 }
 
 template <typename T, typename... FormatArgs>
-std::string encodeToJSONString(const T &mopedObject) {
+std::string encodeToJSONString(const T &mopedObject, FormatArgs... args) {
   std::ostringstream oss;
-  encodeToJSONStream<FormatArgs...>(mopedObject, oss);
+  encodeToJSONStream(mopedObject, oss, args...);
   return oss.str();
 }
 

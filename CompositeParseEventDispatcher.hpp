@@ -19,7 +19,6 @@ struct CompositeParserEventDispatcher {
                                                         DecodingTraits>()},
         _composite{std::forward<Args>(args)...} {}
 
-
   Expected onMember(std::string_view memberName) {
     return _mopedHandlerStack.top()->onMember(_mopedHandlerStack, memberName);
   }
@@ -57,6 +56,8 @@ struct CompositeParserEventDispatcher {
   auto &&moveComposite() { return std::move(_composite); }
 
   auto &getComposite() { return _composite; }
+
+  auto &getMopedHandler() { return _compositeMOPEDHandler; }
 
   template <typename... Args> void reset(Args &&...args) {
     _compositeMOPEDHandler.reset();
