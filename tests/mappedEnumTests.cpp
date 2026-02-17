@@ -1,3 +1,4 @@
+#include "moped/JSONEmitterContext.hpp"
 #include "moped/MappedEnumFlags.hpp"
 #include <cstdint>
 #include <format>

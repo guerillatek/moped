@@ -57,7 +57,7 @@ public:
   using EnumType = EnumT;
   using EntryTupleType = decltype(entries);
 
-  friend std::string to_string(const MappedEnum &mappedEnum) {
+  friend auto to_string(const MappedEnum &mappedEnum) {
     auto entry = findStringForValue<0>(mappedEnum._value);
     if (!entry) {
       throw std::invalid_argument("Invalid enum value");
@@ -97,6 +97,15 @@ public:
 
   static auto from_chars(std::string_view str) {
     return findValueForString<0>(str);
+  }
+
+  template <std::size_t index = 0> static void forEachMappedValue(auto &&func) {
+    if constexpr (index >= std::tuple_size_v<EntryTupleType>) {
+      return;
+    } else {
+      func(std::get<index>(entries));
+      return forEachMappedValue<index + 1>(func);
+    }
   }
 
 private:

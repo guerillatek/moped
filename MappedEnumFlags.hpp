@@ -35,6 +35,14 @@ public:
 
   FlagValueT _value{0};
 
+  void forEachSetFlag(auto &&func) {
+    return MappedEnumType::forEachMappedValue([&](auto &entry) {
+      if (has_value(entry.value)) {
+        func(entry);
+      }
+    });
+  }
+
 public:
   using value_type = std::string_view;
 

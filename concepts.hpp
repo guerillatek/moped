@@ -159,6 +159,12 @@ concept is_mapped_enum = requires(T t) {
   { t.getEnumValue() } -> is_enum;
 };
 
+template <typename T>
+concept is_mapped_enum_flag = requires(T t) {
+  { typename T::FlagValueT{} };
+  { typename T::MappedEnumType{} } -> is_mapped_enum;
+};
+
 template <typename T> struct is_variant_t : std::false_type {};
 
 template <typename... Types>
@@ -253,7 +259,8 @@ concept is_array = std::is_array_v<T> || is_std_array_v<T>;
 
 template <typename T>
 concept IsMOPEDContentCollectionC =
-    IsMOPEDPushCollectionC<T> || IsMOPEDInsertCollectionC<T> || is_array<T>;
+    IsMOPEDPushCollectionC<T> || IsMOPEDInsertCollectionC<T> || is_array<T> ||
+    is_mapped_enum_flag<T>;
 
 template <typename T, typename DecodingTraits>
 concept IsOptionalC = requires(T t) {

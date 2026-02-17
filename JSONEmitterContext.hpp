@@ -43,11 +43,13 @@ public:
   }
 
   // Implementation for starting a JSON array
-  void onArrayStart(std::string_view memberId, size_t) {
+  void onArrayStart(std::optional<std::string_view> memberId) {
     if (!_positionNested.empty() && (_positionNested.top() > 0)) {
       _output << ",";
     }
-    _output << "\"" << memberId << "\": ";
+    if (memberId) {
+      _output << "\"" << *memberId << "\": ";
+    }
     _output << "[";
     _positionNested.push(0);
   }
@@ -63,6 +65,9 @@ public:
   void onArrayFinish() {
     _output << "]";
     _positionNested.pop();
+    if (!_positionNested.empty()) {
+      _positionNested.top()++;
+    }
   }
 
   void onObjectValueEntry(const std::string_view memberId, const auto &value) {
@@ -127,7 +132,7 @@ void encodeToJSONStream(const T &mopedObject, std::ostream &output,
 template <typename T, typename... FormatArgs>
 std::string encodeToJSONString(const T &mopedObject, FormatArgs... args) {
   std::ostringstream oss;
-  encodeToJSONStream(mopedObject, oss, args...);
+  encodeToJSONStream(mopedObject, oss, std::forward<FormatArgs>(args)...);
   return oss.str();
 }
 

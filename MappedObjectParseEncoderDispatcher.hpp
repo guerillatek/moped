@@ -48,7 +48,8 @@ struct Handler<MemberT, DecodingTraits>
   using ValueType = typename MemberT::value_type;
   static constexpr bool HasCompositeValueType =
       IsMOPEDCompositeC<typename MemberT::value_type, DecodingTraits> ||
-      is_variant<typename MemberT::value_type>;
+      is_variant<typename MemberT::value_type> ||
+      IsMOPEDContentCollectionC<typename MemberT::value_type>;
   using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
 
   Expected onMember(MOPEDHandlerStack &, MemberIdType member) override {
@@ -108,16 +109,31 @@ struct Handler<MemberT, DecodingTraits>
     _targetCollection = &targetMember;
   }
 
-  void applyEmitterContext(auto &emitterContext, MemberIdType memberId) {
-    emitterContext.onArrayStart(memberId, _targetCollection->size());
+  void setTargetMember(const MemberT &targetMember) {
+    _targetCollection = &const_cast<MemberT &>(targetMember);
+  }
 
-    for (auto &item : *_targetCollection) {
-      if constexpr (HasCompositeValueType) {
-        this->_valueTypeHandler.setTargetMember(item);
-        this->_valueTypeHandler.applyEmitterContext(emitterContext,
-                                                    std::nullopt);
-      } else {
-        emitterContext.onArrayValueEntry(item);
+  void applyEmitterContext(auto &emitterContext,
+                           std::optional<MemberIdType> memberId) {
+    emitterContext.onArrayStart(memberId);
+
+    // IsMOPEDPushCollectionC constraint encompasses a standard/proprietary
+    // collections with emplace_back method in addition to mapped enum flags
+    // which manifest as an array of values in the emitter context.
+
+    if constexpr (is_mapped_enum_flag<MemberT>) {
+      _targetCollection->forEachSetFlag([&](auto entry) {
+        emitterContext.onArrayValueEntry(entry.stringValue);
+      });
+    } else {
+      for (auto &item : *_targetCollection) {
+        if constexpr (HasCompositeValueType) {
+          this->_valueTypeHandler.setTargetMember(item);
+          this->_valueTypeHandler.applyEmitterContext(emitterContext,
+                                                      std::nullopt);
+        } else {
+          emitterContext.onArrayValueEntry(item);
+        }
       }
     }
     emitterContext.onArrayFinish();
@@ -215,8 +231,12 @@ struct Handler<MemberT, DecodingTraits>
     _targetCollection = &targetMember;
   }
 
+  void setTargetMember(const MemberT &targetMember) {
+    _targetCollection = &const_cast<MemberT &>(targetMember);
+  }
+
   void applyEmitterContext(auto &emitterContext, MemberIdType memberId) {
-    emitterContext.onArrayStart(memberId, _targetCollection->size());
+    emitterContext.onArrayStart(memberId);
 
     for (auto &item : *_targetCollection) {
       if constexpr (HasCompositeValueType) {
@@ -342,6 +362,10 @@ struct Handler<MemberT, DecodingTraits>
   }
 
   void setTargetMember(MemberT &targetMember) { _dispatcher = &targetMember; }
+
+  void setTargetMember(const MemberT &targetMember) {
+    _dispatcher = &const_cast<MemberT &>(targetMember);
+  }
 
   void applyEmitterContext(auto &emitterContext,
                            std::optional<MemberIdType> memberId) {
@@ -470,6 +494,10 @@ struct Handler<MemberT, DecodingTraits>
 
   void setTargetMember(MemberT &targetMember) { _targetArray = &targetMember; }
 
+  void setTargetMember(const MemberT &targetMember) {
+    _targetArray = &const_cast<MemberT &>(targetMember);
+  }
+
   void applyEmitterContext(auto &emitterContext,
                            std::optional<MemberIdT> memberId) {
     emitterContext.onArrayStart(memberId, sizeof(*_targetArray));
@@ -516,7 +544,8 @@ struct Handler<MemberT, DecodingTraits>
   using KeyType = typename MemberT::key_type;
   using MappedType = typename MemberT::mapped_type;
   static constexpr bool HasCompositeMappedType =
-      IsMOPEDCompositeC<MappedType, DecodingTraits> || is_variant<MappedType>;
+      IsMOPEDCompositeC<MappedType, DecodingTraits> || is_variant<MappedType> ||
+      IsMOPEDContentCollectionC<MappedType>;
 
   using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
 
@@ -577,6 +606,10 @@ struct Handler<MemberT, DecodingTraits>
 
   void setTargetMember(MemberT &targetMember) {
     _targetCollection = &targetMember;
+  }
+
+  void setTargetMember(const MemberT &targetMember) {
+    _targetCollection = &const_cast<MemberT &>(targetMember);
   }
 
   void applyEmitterContext(auto &emitterContext,
@@ -734,6 +767,10 @@ struct Handler<VariantT, DecodingTraits> : IMOPEDHandler<DecodingTraits> {
     _captureVariant = &targetMember;
   }
 
+  void setTargetMember(const VariantT &targetMember) {
+    _captureVariant = &const_cast<VariantT &>(targetMember);
+  }
+
 private:
   int _nestingLevel{0};
   MultiMopedHandlerHarness _handlerHarness;
@@ -837,6 +874,11 @@ struct MappedObjectParserEncoderDispatcher : IMOPEDHandler<DecodingTraits> {
 
   void setTargetMember(CaptureType &targetMember) {
     _captureObject = &targetMember;
+    _activeMemberOffset.reset();
+  }
+
+  void setTargetMember(const CaptureType &targetMember) {
+    _captureObject = &const_cast<CaptureType &>(targetMember);
     _activeMemberOffset.reset();
   }
 
