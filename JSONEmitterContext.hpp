@@ -30,7 +30,9 @@ public:
     if (memberId) {
       _output << "\"" << *memberId << "\": ";
     }
-    _output << "{";
+    if (_positionNested.size() > 0) {
+      _output << "{";
+    }
     _positionNested.push(0);
   }
 
@@ -44,6 +46,13 @@ public:
 
   // Implementation for starting a JSON array
   void onArrayStart(std::optional<std::string_view> memberId) {
+    if ((_positionNested.size() == 1) && (_positionNested.top() == 0)) {
+      if ((memberId.has_value()) && (*memberId == "")) {
+        _publishingRootArray = true;
+      } else {
+        _output << "{";
+      }
+    }
     if (!_positionNested.empty() && (_positionNested.top() > 0)) {
       _output << ",";
     }
@@ -71,6 +80,9 @@ public:
   }
 
   void onObjectValueEntry(const std::string_view memberId, const auto &value) {
+    if ((_positionNested.size() == 1) && (_positionNested.top() == 0)) {
+      _output << "{";
+    }
     if (_positionNested.top() > 0) {
       _output << ",";
     }
@@ -82,6 +94,9 @@ public:
   template <typename T>
   void onObjectValueEntry(const std::string_view memberId,
                           const std::optional<T> &value) {
+    if ((_positionNested.size() == 1) && (_positionNested.top() == 0)) {
+      _output << "{";
+    }
     if (!value.has_value()) {
       return; // Skip null values
     }
@@ -89,8 +104,11 @@ public:
   }
 
   void onObjectFinished() {
-    _output << "}";
     _positionNested.pop();
+    if (_positionNested.empty() && !_publishingRootArray) {
+      _output << "}";
+    }
+    _publishingRootArray = false;
   }
 
   // Implementation for a JSON member
@@ -115,6 +133,7 @@ private:
     }
   }
 
+  bool _publishingRootArray{false};
   std::ostream &_output;
   std::stack<std::uint32_t> _positionNested;
 };

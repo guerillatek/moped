@@ -74,9 +74,9 @@ TEST_CASE("Instrument Data load Test with full payload parser and full "
   const Filter &filter = sym.filters[0];
   ASSERT_EQ(filter.filterType, "PRICE_FILTER");
   REQUIRE(filter.minPrice.has_value());
-  ASSERT_EQ(filter.minPrice.value(), S9Int{"0.0100"});
+  ASSERT_EQ(filter.minPrice.value(), S8Int{"0.0100"});
   REQUIRE(filter.maxPrice.has_value());
-  ASSERT_EQ(filter.maxPrice.value(), S9Int{"100000.0000"});
+  ASSERT_EQ(filter.maxPrice.value(), S8Int{"100000.0000"});
   REQUIRE(filter.tickSize.has_value());
-  ASSERT_EQ(filter.tickSize.value(), S9Int{"0.0100"});
+  ASSERT_EQ(filter.tickSize.value(), S8Int{"0.0100"});
 }

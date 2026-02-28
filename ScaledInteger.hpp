@@ -10,8 +10,18 @@ template <moped::is_scaled_int T> struct std::formatter<T> {
   constexpr auto parse(auto &ctx) { return ctx.begin(); }
 
   auto format(const T &scaledInt, auto &ctx) const {
-    char buffer[20];
+    char buffer[32];
     moped::scaledIntToString(scaledInt.getRawIntegerValue(), T::Scale, buffer);
+    bool is_valid_start = (buffer[0] == '-') || (buffer[0] == '.') ||
+                          ((buffer[0] >= '0') && (buffer[0] <= '9'));
+    if (!is_valid_start) {
+      // Handle the case where the buffer is not properly formatted (e.g., due
+      // to an error in scaledIntToString)
+      moped::scaledIntToString(scaledInt.getRawIntegerValue(), T::Scale,
+                               buffer);
+      throw std::format_error("Invalid ScaledInteger format: " +
+                              std::string(buffer));
+    }
     return std::format_to(ctx.out(), "{}", buffer);
   }
 };
@@ -39,7 +49,6 @@ public:
 
   ScaledInteger(const ScaledInteger &other) = default;
   ScaledInteger &operator=(const ScaledInteger &other) = default;
-
 
   // Numeric conversions represent potential loss of information
   template <std::integral It> It toInteger() const {
@@ -95,7 +104,7 @@ public:
 
   friend std::ostream &operator<<(std::ostream &os,
                                   const ScaledInteger &scaledInt) {
-    char buffer[20];
+    char buffer[32];
     scaledIntToString(scaledInt._rawIntegerValue, Scale, buffer);
     return os << std::string_view{static_cast<const char *>(buffer)};
   }

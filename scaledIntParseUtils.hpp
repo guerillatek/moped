@@ -190,7 +190,7 @@ scaledIntToString(int64_t value, int valueScale, auto &fixedLenBuffer,
   if (decimalPlaces == std::numeric_limits<int>::min()) {
     decimalPlaces = valueScale;
   }
-  int scale = 15;
+  int scale = 18;
   bool decimalSet = false;
   auto writePos = std::begin(fixedLenBuffer);
   auto endWrite = std::prev(std::end(fixedLenBuffer));

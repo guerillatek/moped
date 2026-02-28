@@ -650,7 +650,7 @@ private:
 };
 
 template <typename MemberT, DecodingTraitsC DecodingTraits>
-  requires(IsOptionalC<MemberT, DecodingTraits>)
+  requires(is_optional<MemberT, DecodingTraits>)
 struct Handler<MemberT, DecodingTraits>
     : Handler<typename MemberT::value_type, DecodingTraits> {
 
@@ -993,7 +993,7 @@ private:
       if (MemberIndex == *_activeMemberOffset) {
         auto &memberValue =
             std::get<MemberIndex>(_handlerTuple).getMember(*_captureObject);
-        if constexpr (IsOptionalC<std::decay_t<decltype(memberValue)>,
+        if constexpr (is_optional<std::decay_t<decltype(memberValue)>,
                                   DecodingTraits>) {
           memberValue.reset();
           return {};

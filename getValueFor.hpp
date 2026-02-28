@@ -49,7 +49,7 @@ std::expected<TargetT, ParseError> getValueFor(std::string_view value) {
   } else if constexpr ((std::is_integral_v<TargetT>) ||
                        (std::is_floating_point_v<TargetT>)) {
     return ston<TargetT>(value);
-  } else if constexpr (IsOptionalC<TargetT, DecodingTraits>) {
+  } else if constexpr (is_optional<TargetT, DecodingTraits>) {
     if (value.empty()) {
       return std::nullopt;
     }

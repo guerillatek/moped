@@ -263,10 +263,15 @@ concept IsMOPEDContentCollectionC =
     is_mapped_enum_flag<T>;
 
 template <typename T, typename DecodingTraits>
-concept IsOptionalC = requires(T t) {
+concept is_optional = requires(T t) {
   { t.has_value() } -> std::same_as<bool>;
   { t.value() } -> std::same_as<typename T::value_type &>;
 } && IsMOPEDContentC<typename T::value_type, DecodingTraits>;
+
+template <typename P, typename DecodingTraits>
+concept can_dereference = requires(P ptr) {
+  { *ptr } -> std::same_as<typename P::value_type &>;
+} && !is_optional<P, DecodingTraits>;
 
 template <typename T>
 concept IsSettableVariantC = ISettableVariant(T{});
@@ -274,7 +279,7 @@ concept IsSettableVariantC = ISettableVariant(T{});
 template <typename T, typename DecodingTraits>
 concept IsSettableC =
     IsMOPEDValueC<T> ||
-    (IsOptionalC<T, DecodingTraits> && IsMOPEDValueC<typename T::value_type>);
+    (is_optional<T, DecodingTraits> && IsMOPEDValueC<typename T::value_type>);
 
 template <typename T, typename DecodingTraits>
 concept IsCompositeCollectionC =

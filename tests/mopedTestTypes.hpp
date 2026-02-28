@@ -6,7 +6,7 @@
 #include <optional>
 
 namespace moped::tests {
-using S9Int = moped::ScaledInteger<std::int64_t, 9>;
+using S8Int = moped::ScaledInteger<std::int64_t, 8>;
 
 namespace view {
 struct RateLimit {
@@ -28,29 +28,29 @@ struct RateLimit {
 // Struct for filters
 struct Filter {
   std::string_view filterType;
-  std::optional<S9Int> bidMultiplierUp;
-  std::optional<S9Int> bidMultiplierDown;
-  std::optional<S9Int> askMultiplierUp;
-  std::optional<S9Int> askMultiplierDown;
-  std::optional<S9Int> minPrice;
-  std::optional<S9Int> maxPrice;
-  std::optional<S9Int> tickSize;
-  std::optional<S9Int> minQty;
-  std::optional<S9Int> maxQty;
-  std::optional<S9Int> stepSize;
-  std::optional<S9Int> limit;
-  std::optional<S9Int> minNotional;
-  std::optional<S9Int> multiplierUp;
-  std::optional<S9Int> multiplierDown;
+  std::optional<S8Int> bidMultiplierUp;
+  std::optional<S8Int> bidMultiplierDown;
+  std::optional<S8Int> askMultiplierUp;
+  std::optional<S8Int> askMultiplierDown;
+  std::optional<S8Int> minPrice;
+  std::optional<S8Int> maxPrice;
+  std::optional<S8Int> tickSize;
+  std::optional<S8Int> minQty;
+  std::optional<S8Int> maxQty;
+  std::optional<S8Int> stepSize;
+  std::optional<S8Int> limit;
+  std::optional<S8Int> minNotional;
+  std::optional<S8Int> multiplierUp;
+  std::optional<S8Int> multiplierDown;
   std::optional<bool> applyToMarket;
   std::optional<bool> applyMinToMarket;
-  std::optional<S9Int> maxNotional;
+  std::optional<S8Int> maxNotional;
   std::optional<bool> applyMaxToMarket;
-  std::optional<S9Int> avgPriceMins;
-  std::optional<S9Int> minTrailingAboveDelta;
-  std::optional<S9Int> maxTrailingAboveDelta;
-  std::optional<S9Int> minTrailingBelowDelta;
-  std::optional<S9Int> maxTrailingBelowDelta;
+  std::optional<S8Int> avgPriceMins;
+  std::optional<S8Int> minTrailingAboveDelta;
+  std::optional<S8Int> maxTrailingAboveDelta;
+  std::optional<S8Int> minTrailingBelowDelta;
+  std::optional<S8Int> maxTrailingBelowDelta;
   std::optional<int> maxNumOrders;
   std::optional<int> maxNumAlgoOrders;
 
@@ -169,29 +169,29 @@ struct RateLimit {
 // Struct for filters
 struct Filter {
   std::string filterType;
-  std::optional<S9Int> bidMultiplierUp;
-  std::optional<S9Int> bidMultiplierDown;
-  std::optional<S9Int> askMultiplierUp;
-  std::optional<S9Int> askMultiplierDown;
-  std::optional<S9Int> minPrice;
-  std::optional<S9Int> maxPrice;
-  std::optional<S9Int> tickSize;
-  std::optional<S9Int> minQty;
-  std::optional<S9Int> maxQty;
-  std::optional<S9Int> stepSize;
-  std::optional<S9Int> limit;
-  std::optional<S9Int> minNotional;
-  std::optional<S9Int> multiplierUp;
-  std::optional<S9Int> multiplierDown;
+  std::optional<S8Int> bidMultiplierUp;
+  std::optional<S8Int> bidMultiplierDown;
+  std::optional<S8Int> askMultiplierUp;
+  std::optional<S8Int> askMultiplierDown;
+  std::optional<S8Int> minPrice;
+  std::optional<S8Int> maxPrice;
+  std::optional<S8Int> tickSize;
+  std::optional<S8Int> minQty;
+  std::optional<S8Int> maxQty;
+  std::optional<S8Int> stepSize;
+  std::optional<S8Int> limit;
+  std::optional<S8Int> minNotional;
+  std::optional<S8Int> multiplierUp;
+  std::optional<S8Int> multiplierDown;
   std::optional<bool> applyToMarket;
   std::optional<bool> applyMinToMarket;
-  std::optional<S9Int> maxNotional;
+  std::optional<S8Int> maxNotional;
   std::optional<bool> applyMaxToMarket;
-  std::optional<S9Int> avgPriceMins;
-  std::optional<S9Int> minTrailingAboveDelta;
-  std::optional<S9Int> maxTrailingAboveDelta;
-  std::optional<S9Int> minTrailingBelowDelta;
-  std::optional<S9Int> maxTrailingBelowDelta;
+  std::optional<S8Int> avgPriceMins;
+  std::optional<S8Int> minTrailingAboveDelta;
+  std::optional<S8Int> maxTrailingAboveDelta;
+  std::optional<S8Int> minTrailingBelowDelta;
+  std::optional<S8Int> maxTrailingBelowDelta;
   std::optional<int> maxNumOrders;
   std::optional<int> maxNumAlgoOrders;
 
@@ -297,7 +297,7 @@ struct ExchangeInfoWithSymbolDispatch {
   ExchangeInfoWithSymbolDispatch(auto &&handler)
       : symbols(std::move(handler)) {}
 
-  ExchangeInfoWithSymbolDispatch()= default;
+  ExchangeInfoWithSymbolDispatch() = default;
   template <moped::DecodingTraitsC DecodingTraits>
   static auto getMOPEDHandler() {
     return moped::mopedHandler<DecodingTraits, ExchangeInfoWithSymbolDispatch>(

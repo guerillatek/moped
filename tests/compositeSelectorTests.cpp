@@ -1,18 +1,18 @@
 #include "moped/JSONStreamParser.hpp"
-#include "moped/ParsingPivotMember.hpp"
 #include "moped/MappedObjectParseEncoderDispatcher.hpp"
+#include "moped/ParsingPivotMember.hpp"
 #include "moped/ScaledInteger.hpp"
 
 namespace moped {
 
-using S9Int = moped::ScaledInteger<std::int64_t, 9>;
+using S8Int = moped::ScaledInteger<std::int64_t, 8>;
 
 enum class Side { BUY, SELL };
 
 struct LastTradeEventT {
   std::string securityId;     // Maps to "s" (Symbol)
-  S9Int price;                // Maps to "p" (Price)
-  S9Int quantity;             // Maps to "q" (Quantity)
+  S8Int price;                // Maps to "p" (Price)
+  S8Int quantity;             // Maps to "q" (Quantity)
   uint64_t eventId;           // Maps to "t" (Trade ID) - removed optional
   moped::TimePoint eventTime; // Maps to "E" (Event time) - removed optional
   Side aggressor;             // Maps to "m" (Is buyer market maker)
