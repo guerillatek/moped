@@ -15,37 +15,45 @@ template <IParserEventDispatchC ParseEventDispatchT>
 class JSONStreamParser : public ParserBase {
 
   using ExpectedText = std::expected<std::string, ParseError>;
+  using ExpectedMember = std::expected<std::string_view, ParseError>;
 
-  ExpectedText getMemberText(std::istream &is) {
+  ExpectedMember getMemberText(std::istream &is) {
     char c;
     is >> c;
     if (c != '"') {
+      int pos = static_cast<int>(is.tellg());
       return std::unexpected{ParseError{
-          "Expected open quote for a member definition, '\"' but got", c}};
+          "Expected open quote for a member definition, '\"' but got",
+          std::format("{} at position {} after value {}", c, pos,
+                      _activeMemberName)}};
     }
 
-    _reusableBuffer.clear();
+    _activeMemberName.clear();
     while (is.operator bool() && is.peek() != '"') {
-      _reusableBuffer += is.get();
+      _activeMemberName += is.get();
     }
     if (!is) {
       return std::unexpected{
-          ParseError{"Missing closing quote, '\"' for member start at {}",
-                     _reusableBuffer}};
+          ParseError{"Missing closing quote, '\"' for member start at ",
+                     _activeMemberName}};
     }
 
     is.get(); // flush end quote
-    if (isIdentifier(_reusableBuffer)) {
-      return _reusableBuffer;
+    if (isIdentifier(_activeMemberName)) {
+      return _activeMemberName.c_str();
     }
 
     return std::unexpected{
-        ParseError{"Invalid member identifier", _reusableBuffer.data()}};
+        ParseError{"Invalid member identifier", _activeMemberName}};
   }
 
   ExpectedText getStringValueText(std::istream &ss) {
     char c = ss.get();
     _reusableBuffer.clear();
+    if (c == '\"')
+    {
+      return std::string{}; // empty string value
+    }
     _reusableBuffer += c;
     while (ss) {
       if (ss.peek() == '\\') {
@@ -62,7 +70,7 @@ class JSONStreamParser : public ParserBase {
       return _reusableBuffer;
     }
     return std::unexpected{ParseError{
-        "String value='{}' missing closing quote,\"", _reusableBuffer.data()}};
+        "String value='{}' missing closing quote,\"", _reusableBuffer}};
   }
 
   ExpectedText getNumericValueText(std::istream &is) {
@@ -88,10 +96,8 @@ public:
     ValidatorStack vs;
     ParseState parseState = ParseState::MemberName;
 
-    char c;
     ss >> std::ws;
-    ss >> c;
-
+    char c = ss.peek();
     bool usingRootArray = false;
     if (c == '[') {
       usingRootArray = true;
@@ -118,7 +124,7 @@ public:
         return std::unexpected(
             ParseError{"Expected an object start, '{' but got ", c});
       }
-      vs.push(c);
+      vs.push(ss.get());
       auto objectStartResult = _eventDispatch.onObjectStart();
       if (!objectStartResult) {
         return objectStartResult; // Both are Expected, return directly
@@ -147,7 +153,7 @@ public:
       case MemberName: {
         auto expectedText = getMemberText(ss);
         if (!expectedText) {
-          return std::unexpected(expectedText.error());
+          return std::unexpected(expectedText.error().memorySafe());
         }
         ss >> std::ws;
         ss >> c;
@@ -159,7 +165,8 @@ public:
 
         auto memberResult = _eventDispatch.onMember(expectedText.value());
         if (!memberResult) {
-          return memberResult; // Both are Expected, return directly
+          return std::unexpected(memberResult.error().memorySafe());
+          ; // Both are Expected, return directly
         }
       } break;
       case OpenValue: {

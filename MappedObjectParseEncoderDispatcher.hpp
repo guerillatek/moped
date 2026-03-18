@@ -38,6 +38,12 @@ struct ValueHandlerBase<T, DecodingTraits> {
   ValueTypeHandlerT _valueTypeHandler{};
 };
 
+template <is_pointer_type T, DecodingTraitsC DecodingTraits>
+struct ValueHandlerBase<T, DecodingTraits> {
+  using ValueTypeHandlerT = Handler<T, DecodingTraits>;
+  ValueTypeHandlerT _valueTypeHandler{};
+};
+
 template <IsMOPEDPushCollectionC MemberT, DecodingTraitsC DecodingTraits>
 struct Handler<MemberT, DecodingTraits>
     : IMOPEDHandler<DecodingTraits>,
@@ -47,9 +53,8 @@ struct Handler<MemberT, DecodingTraits>
   using MemberType = MemberT;
   using ValueType = typename MemberT::value_type;
   static constexpr bool HasCompositeValueType =
-      IsMOPEDCompositeC<typename MemberT::value_type, DecodingTraits> ||
-      is_variant<typename MemberT::value_type> ||
-      IsMOPEDContentCollectionC<typename MemberT::value_type>;
+      IMOPEDHandlerC<Handler<ValueType, DecodingTraits>, DecodingTraits>;
+
   using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
 
   Expected onMember(MOPEDHandlerStack &, MemberIdType member) override {
@@ -128,7 +133,11 @@ struct Handler<MemberT, DecodingTraits>
     } else {
       for (auto &item : *_targetCollection) {
         if constexpr (HasCompositeValueType) {
-          this->_valueTypeHandler.setTargetMember(item);
+          if constexpr (is_pointer_type<ValueType> || is_iterator<ValueType>) {
+            this->_valueTypeHandler.setTargetMember(*item);
+          } else {
+            this->_valueTypeHandler.setTargetMember(item);
+          }
           this->_valueTypeHandler.applyEmitterContext(emitterContext,
                                                       std::nullopt);
         } else {
@@ -369,8 +378,8 @@ struct Handler<MemberT, DecodingTraits>
 
   void applyEmitterContext(auto &emitterContext,
                            std::optional<MemberIdType> memberId) {
-    return std::unexpected("Emission not supported for types that use function "
-                           "dispatchers in lieu of collection types");
+    static_assert(false, "Emission not supported for types that use function "
+                         "dispatchers in lieu of collection types");
   }
 
 private:
@@ -650,17 +659,71 @@ private:
 };
 
 template <typename MemberT, DecodingTraitsC DecodingTraits>
-  requires(is_optional<MemberT, DecodingTraits>)
+  requires(is_optional<MemberT>)
 struct Handler<MemberT, DecodingTraits>
     : Handler<typename MemberT::value_type, DecodingTraits> {
 
   using MemberType = MemberT;
   using MemberIdT = typename DecodingTraits::MemberIdType;
+  using ValueType = typename MemberT::value_type;
 
   void setTargetMember(MemberT &targetMember) {
     targetMember = typename MemberT::value_type{};
     Handler<typename MemberT::value_type, DecodingTraits>::setTargetMember(
         targetMember.value());
+  }
+
+  void setTargetMember(ValueType &targetMemberValue) {
+    Handler<typename MemberT::value_type, DecodingTraits>::setTargetMember(
+        targetMemberValue);
+  }
+};
+
+// typename std::pointer_traits<P>::element_type
+
+template <typename MemberT, DecodingTraitsC DecodingTraits>
+  requires(is_iterator<MemberT>)
+struct Handler<MemberT, DecodingTraits>
+    : Handler<typename std::iterator_traits<MemberT>::value_type,
+              DecodingTraits> {
+  using BaseHandler =
+      Handler<typename std::iterator_traits<MemberT>::value_type,
+              DecodingTraits>;
+  using MemberType = MemberT;
+  using MemberIdT = typename DecodingTraits::MemberIdType;
+  using ValueType = typename std::iterator_traits<MemberT>::value_type;
+
+  void setTargetMember(MemberT &targetMember) {
+    throw std::logic_error(
+        "Directly setting target member when encoding is not supported for "
+        "iterator member types");
+  }
+
+  void setTargetMember(const ValueType &targetMember) {
+    BaseHandler::setTargetMember(const_cast<ValueType &>(targetMember));
+  }
+};
+
+template <typename MemberT, DecodingTraitsC DecodingTraits>
+  requires(is_pointer_type<MemberT>)
+struct Handler<MemberT, DecodingTraits>
+    : Handler<typename std::pointer_traits<MemberT>::element_type,
+              DecodingTraits> {
+  using BaseHandler =
+      Handler<typename std::pointer_traits<MemberT>::element_type,
+              DecodingTraits>;
+  using MemberType = MemberT;
+  using MemberIdT = typename DecodingTraits::MemberIdType;
+  using ValueType = typename std::pointer_traits<MemberT>::element_type;
+
+  void setTargetMember(MemberT &targetMember) {
+    throw std::logic_error(
+        "Directly setting target member when encoding is not supported for "
+        "pointer member types");
+  }
+
+  void setTargetMember(const ValueType &targetMember) {
+    BaseHandler::setTargetMember(const_cast<ValueType &>(targetMember));
   }
 };
 
@@ -802,7 +865,33 @@ struct MemberIdHandlerPair {
 
   void applyEmitterContext(auto &emitterContext, CaptureT &captureTarget) {
     auto &memberValue = captureTarget.*memberPtr;
-    if constexpr (IMOPEDHandlerC<decltype(handler), DecodingTraits>) {
+    if constexpr (is_optional<MemberT>) {
+      if (!memberValue.has_value()) {
+        return; // Don't emit anything for disengaged optional
+      }
+      if constexpr (IMOPEDHandlerC<decltype(handler), DecodingTraits>) {
+        handler.setTargetMember(*memberValue);
+        handler.applyEmitterContext(emitterContext, memberId);
+      } else {
+        emitterContext.onObjectValueEntry(memberId, *memberValue);
+      }
+    } else if constexpr (can_dereference<MemberT>) {
+
+      if constexpr (is_pointer_type<MemberT>) {
+        if (memberValue == nullptr) {
+          return; // Don't emit anything for null pointers
+        }
+      }
+
+      if constexpr (IMOPEDHandlerC<decltype(handler), DecodingTraits>) {
+        handler.setTargetMember(*memberValue);
+        handler.applyEmitterContext(emitterContext, memberId);
+      } else {
+        emitterContext.onObjectValueEntry(memberId, *memberValue);
+      }
+    }
+
+    else if constexpr (IMOPEDHandlerC<decltype(handler), DecodingTraits>) {
       handler.setTargetMember(memberValue);
       handler.applyEmitterContext(emitterContext, memberId);
     } else {
@@ -993,13 +1082,15 @@ private:
       if (MemberIndex == *_activeMemberOffset) {
         auto &memberValue =
             std::get<MemberIndex>(_handlerTuple).getMember(*_captureObject);
-        if constexpr (is_optional<std::decay_t<decltype(memberValue)>,
-                                  DecodingTraits>) {
+        if constexpr (is_optional<std::decay_t<decltype(memberValue)>>) {
           memberValue.reset();
           return {};
         } else {
-          return std::unexpected("Parse error ... null value not applicable "
-                                 "for non-optional member");
+          auto memberId = std::get<MemberIndex>(_handlerTuple).memberId;
+          return std::unexpected(
+              ParseError{"Parse error ... null value not applicable "
+                         "for non-optional member",
+                         memberId});
         }
       }
       return applyNullValueToActiveMember<MemberIndex + 1>();

@@ -28,12 +28,17 @@ template <moped::is_scaled_int T> struct std::formatter<T> {
 
 namespace moped {
 
-template <std::integral I, std::uint8_t Scale10V> class ScaledInteger {
+template <typename T>
+concept is_allowed_itegral =
+    std::is_integral_v<T> || std::is_same_v<T, __int128> ||
+    std::is_same_v<T, unsigned __int128>;
+
+template <is_allowed_itegral I, std::uint8_t Scale10V> class ScaledInteger {
 public:
   using IntegralT = I;
 
   static constexpr auto Scale = Scale10V;
-  static constexpr auto Divisor = scale10(Scale);
+  static constexpr auto Divisor = scale10<I>(Scale);
 
   ScaledInteger() : _rawIntegerValue{0} {}
   ScaledInteger(std::string_view input)
@@ -41,9 +46,9 @@ public:
 
   template <is_scaled_int S> explicit ScaledInteger(const S &src) {
     if (S::Scale > Scale) {
-      _rawIntegerValue = src._rawIntegerValue / scale10(S::Scale - Scale);
+      _rawIntegerValue = src._rawIntegerValue / scale10<I>(S::Scale - Scale);
     } else {
-      _rawIntegerValue = src._rawIntegerValue * scale10(Scale - S::Scale);
+      _rawIntegerValue = src._rawIntegerValue * scale10<I>(Scale - S::Scale);
     }
   }
 
@@ -56,7 +61,7 @@ public:
   }
 
   template <std::floating_point Ft> Ft toFloat() const {
-    return static_cast<Ft>(_rawIntegerValue) / scale10(Scale);
+    return static_cast<Ft>(_rawIntegerValue) / scale10<I>(Scale);
   }
 
   auto toString() const { return std::format("{}", *this); }
@@ -93,18 +98,18 @@ public:
 
   ScaledInteger operator*(const ScaledInteger &rhs) const {
     return ScaledInteger{_rawIntegerValue * rhs.getRawIntegerValue() /
-                         scale10(Scale)};
+                         scale10<I>(Scale)};
   }
 
   ScaledInteger operator/(const ScaledInteger &rhs) const {
     // Avoids potential divide by zero errors
-    return ScaledInteger{_rawIntegerValue * scale10(Scale) /
+    return ScaledInteger{_rawIntegerValue * scale10<I>(Scale) /
                          rhs.getRawIntegerValue()};
   }
 
   friend std::ostream &operator<<(std::ostream &os,
                                   const ScaledInteger &scaledInt) {
-    char buffer[32];
+    char buffer[128];
     scaledIntToString(scaledInt._rawIntegerValue, Scale, buffer);
     return os << std::string_view{static_cast<const char *>(buffer)};
   }

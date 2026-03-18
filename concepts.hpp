@@ -45,6 +45,19 @@ struct ParseError {
         err.referenceValue);
   }
 
+  ParseError memorySafe() const {
+    return std::visit(
+        [this](auto &arg) -> ParseError {
+          using T = std::decay_t<decltype(arg)>;
+          if constexpr (std::is_same_v<T, std::string_view>) {
+            return ParseError(message, std::string(arg));
+          } else {
+            return *this;
+          }
+        },
+        referenceValue);
+  }
+
   friend std::ostream &operator<<(std::ostream &os, const ParseError &err) {
     os << to_string(err);
     return os;
@@ -262,24 +275,36 @@ concept IsMOPEDContentCollectionC =
     IsMOPEDPushCollectionC<T> || IsMOPEDInsertCollectionC<T> || is_array<T> ||
     is_mapped_enum_flag<T>;
 
-template <typename T, typename DecodingTraits>
+template <typename T>
+concept can_dereference = requires(T t) {
+  { *t };
+};
+
+template <typename T>
 concept is_optional = requires(T t) {
   { t.has_value() } -> std::same_as<bool>;
   { t.value() } -> std::same_as<typename T::value_type &>;
-} && IsMOPEDContentC<typename T::value_type, DecodingTraits>;
+} && can_dereference<T>;
 
-template <typename P, typename DecodingTraits>
-concept can_dereference = requires(P ptr) {
-  { *ptr } -> std::same_as<typename P::value_type &>;
-} && !is_optional<P, DecodingTraits>;
+template <typename P>
+concept is_iterator = requires() {
+  typename std::iterator_traits<P>::value_type;
+} && can_dereference<P> && !is_optional<P>;
+
+template <typename P>
+concept is_smart_pointer = requires() {
+  typename std::pointer_traits<P>::element_type;
+} && can_dereference<P> && !is_optional<P>;
+
+template <typename T>
+concept is_pointer_type = std::is_pointer_v<T> || is_smart_pointer<T>;
 
 template <typename T>
 concept IsSettableVariantC = ISettableVariant(T{});
 
 template <typename T, typename DecodingTraits>
-concept IsSettableC =
-    IsMOPEDValueC<T> ||
-    (is_optional<T, DecodingTraits> && IsMOPEDValueC<typename T::value_type>);
+concept IsSettableC = IsMOPEDValueC<T> ||
+                      (is_optional<T> && IsMOPEDValueC<typename T::value_type>);
 
 template <typename T, typename DecodingTraits>
 concept IsCompositeCollectionC =

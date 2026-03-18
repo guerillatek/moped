@@ -13,7 +13,7 @@ namespace moped {
 template <typename F>
 concept FloatType = std::is_floating_point_v<F>;
 
-constexpr int64_t scale10(int64_t n) {
+constexpr int64_t smallScale10(std::uint32_t n) {
   constexpr size_t NUM_SCALE_FACTORS = 19uz;
   static constexpr std::array<std::int64_t, NUM_SCALE_FACTORS> values = {
       1,
@@ -39,8 +39,34 @@ constexpr int64_t scale10(int64_t n) {
   return values[n];
 }
 
+constexpr std::array<unsigned __int128, 36uz> makeBigScale10Values() {
+  std::array<unsigned __int128, 36uz> values{};
+  values[0] = 1;
+  for (std::size_t i = 1; i < values.size(); ++i) {
+    values[i] = (values[i - 1] << 3) + (values[i - 1] << 1);
+  }
+  return values;
+}
+
+constexpr unsigned __int128 bigScale10(std::uint32_t n) {
+  constexpr unsigned __int128 BIG_NUM_SCALE_FACTORS = 36uz;
+  static constexpr std::array<unsigned __int128, BIG_NUM_SCALE_FACTORS>
+      big_values = makeBigScale10Values();
+
+  return big_values[n];
+}
+
+template <typename T> constexpr T scale10(T n) {
+  if constexpr (std::is_same_v<T, __int128> ||
+                std::is_same_v<T, unsigned __int128>) {
+    return bigScale10(n);
+  } else {
+    return smallScale10(n);
+  }
+}
+
 template <typename T> inline T floatToScaledInt(FloatType auto v, int scale) {
-  v = v * scale10(scale);
+  v = v * scale10<T>(scale);
   return T(std::round(v));
 }
 
@@ -93,7 +119,7 @@ inline T parseToScaledInt(const auto &floatString, int scale) {
 
     } else {
       fromChars(cr, end, expVal);
-      result *= scale10(expVal);
+      result *= scale10<T>(expVal);
     }
     end = newEndP;
   }
@@ -103,9 +129,9 @@ inline T parseToScaledInt(const auto &floatString, int scale) {
 
   result /= 10;
   if (scale < 0) {
-    return result / scale10(abs(scale)) * ((negative) ? -1 : 1);
+    return result / scale10<T>(abs(scale)) * ((negative) ? -1 : 1);
   }
-  return result * scale10(scale) * ((negative) ? -1 : 1);
+  return result * scale10<T>(scale) * ((negative) ? -1 : 1);
 }
 
 template <typename T>
@@ -149,7 +175,7 @@ inline std::tuple<T, int> parseToIntFindScale(const auto &floatString) {
 
     } else {
       fromChars(cr, end, expVal);
-      result *= scale10(expVal);
+      result *= scale10<T>(expVal);
     }
     end = newEndP;
   }
@@ -158,7 +184,7 @@ inline std::tuple<T, int> parseToIntFindScale(const auto &floatString) {
   }
 
   result /= 10;
-  return {result * scale10(scale) * ((negative) ? -1 : 1), scale};
+  return {result * scale10<T>(scale) * ((negative) ? -1 : 1), scale};
 }
 
 template <typename T>
@@ -179,9 +205,10 @@ inline T parseToIntFindScale(const auto &floatString, int &scale) {
 }
 
 inline auto &
-scaledIntToString(int64_t value, int valueScale, auto &fixedLenBuffer,
+scaledIntToString(auto value, int valueScale, auto &fixedLenBuffer,
                   int decimalPlaces = std::numeric_limits<int>::min()) {
 
+  using T = std::decay_t<decltype(value)>;
   if (value == std::numeric_limits<int>::min()) {
     static auto fastZero = std::string_view{"0.0"};
     std::copy(fastZero.begin(), fastZero.end() + 1, std::begin(fixedLenBuffer));
@@ -190,7 +217,12 @@ scaledIntToString(int64_t value, int valueScale, auto &fixedLenBuffer,
   if (decimalPlaces == std::numeric_limits<int>::min()) {
     decimalPlaces = valueScale;
   }
-  int scale = 18;
+  int scale;
+  if constexpr (std::is_same_v<T, __int128> || std::is_same_v<T, unsigned __int128>) {
+    scale = 35;
+  } else {
+    scale = 18;
+  }
   bool decimalSet = false;
   auto writePos = std::begin(fixedLenBuffer);
   auto endWrite = std::prev(std::end(fixedLenBuffer));
@@ -200,7 +232,7 @@ scaledIntToString(int64_t value, int valueScale, auto &fixedLenBuffer,
     ++writePos;
   }
 
-  if (!(value / scale10(valueScale))) {
+  if (!(value / scale10<T>(valueScale))) {
     *writePos++ = '0';
   }
 
@@ -215,15 +247,15 @@ scaledIntToString(int64_t value, int valueScale, auto &fixedLenBuffer,
       numStarted = true;
       decimalSet = true;
     }
-    auto digitVal = value / scale10(scale);
+    auto digitVal = value / scale10<T>(scale);
 
-    value -= digitVal * scale10(scale);
+    value -= digitVal * scale10<T>(scale);
 
     if (digitVal != 0) {
       numStarted = true;
     }
     if (numStarted) {
-      *writePos = '0' + abs(digitVal);
+      *writePos = '0' + abs(static_cast<int>(digitVal));
       ++writePos;
       if (decimalSet) {
         if (--decimalPlaces <= 0) {
@@ -240,9 +272,10 @@ scaledIntToString(int64_t value, int valueScale, auto &fixedLenBuffer,
   return fixedLenBuffer;
 }
 
-template <typename F> inline F scaledIntToFloat(int64_t value, int valueScale) {
+template <typename F> inline F scaledIntToFloat(auto value, int valueScale) {
   // Note: floating point errors can arise here!!
-  return static_cast<F>(value) / scale10(valueScale);
+  using T = std::decay_t<decltype(value)>;
+  return static_cast<F>(value) / scale10<T>(valueScale);
 }
 
 template <typename T> inline T intScaled(T value, int valueScale) {
@@ -254,7 +287,7 @@ template <typename T> inline T intScaled(T value, int valueScale) {
     if (valueScale < -15) {
       return 0;
     }
-    const auto DIV = scale10(abs(valueScale));
+    const auto DIV = scale10<T>(abs(valueScale));
     const auto idiv = std::div(value, DIV);
     if (idiv.rem < DIV / 2) {
       return idiv.quot;
@@ -262,7 +295,7 @@ template <typename T> inline T intScaled(T value, int valueScale) {
     return idiv.quot + 1;
   }
 
-  return value * scale10(valueScale);
+  return value * scale10<T>(valueScale);
 }
 
 } // namespace moped

@@ -191,7 +191,7 @@ public:
               return std::string("Unexpected end of frame starting json parse");
             },
             [&, this]() { _activeStream >> std::ws; },
-            [&, this]() { _activeStream >> c; });
+            [&, this]() { c = _activeStream.peek(); });
         !result) {
       co_return std::unexpected(result.error());
     }
@@ -218,7 +218,7 @@ public:
       parseState = ParseState::OpenValue;
     }
 
-    if (c != '{') {
+    if (_activeStream.get() != '{') {
       co_return std::unexpected(
           std::format("Expected an object start, '{{' but got {}", c));
     }

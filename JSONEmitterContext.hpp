@@ -37,8 +37,12 @@ public:
   }
 
   void onObjectFinish() {
-    _output << "}";
     _positionNested.pop();
+    if (_positionNested.empty() && _publishingRootArray) {
+      _publishingRootArray = false;
+      return;
+    }
+    _output << "}";
     if (!_positionNested.empty()) {
       _positionNested.top()++;
     }
@@ -49,6 +53,9 @@ public:
     if ((_positionNested.size() == 1) && (_positionNested.top() == 0)) {
       if ((memberId.has_value()) && (*memberId == "")) {
         _publishingRootArray = true;
+        _output << "[";
+        _positionNested.push(0);
+        return;
       } else {
         _output << "{";
       }
@@ -102,15 +109,6 @@ public:
     }
     onObjectValueEntry(memberId, value.value());
   }
-
-  void onObjectFinished() {
-    _positionNested.pop();
-    if (_positionNested.empty() && !_publishingRootArray) {
-      _output << "}";
-    }
-    _publishingRootArray = false;
-  }
-
   // Implementation for a JSON member
 
 private:
@@ -118,7 +116,7 @@ private:
     _output << "\"" << TimePointFormatter::format(value) << "\"";
   }
 
-  template <std::integral I, std::uint8_t Scale10V>
+  template <is_allowed_itegral I, std::uint8_t Scale10V>
   void writeJSONEncodedValue(const ScaledInteger<I, Scale10V> &value) {
     _output << value.toString();
   }
