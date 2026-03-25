@@ -1,5 +1,12 @@
 #pragma once
 
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+using int128_t = __int128;
+using uint128_t = unsigned __int128;
+#pragma GCC diagnostic pop
+
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -39,8 +46,8 @@ constexpr int64_t smallScale10(std::uint32_t n) {
   return values[n];
 }
 
-constexpr std::array<unsigned __int128, 36uz> makeBigScale10Values() {
-  std::array<unsigned __int128, 36uz> values{};
+constexpr std::array<uint128_t, 36uz> makeBigScale10Values() {
+  std::array<uint128_t, 36uz> values{};
   values[0] = 1;
   for (std::size_t i = 1; i < values.size(); ++i) {
     values[i] = (values[i - 1] << 3) + (values[i - 1] << 1);
@@ -48,17 +55,17 @@ constexpr std::array<unsigned __int128, 36uz> makeBigScale10Values() {
   return values;
 }
 
-constexpr unsigned __int128 bigScale10(std::uint32_t n) {
-  constexpr unsigned __int128 BIG_NUM_SCALE_FACTORS = 36uz;
-  static constexpr std::array<unsigned __int128, BIG_NUM_SCALE_FACTORS>
+constexpr uint128_t bigScale10(std::uint32_t n) {
+  constexpr uint128_t BIG_NUM_SCALE_FACTORS = 36uz;
+  static constexpr std::array<uint128_t, BIG_NUM_SCALE_FACTORS>
       big_values = makeBigScale10Values();
 
   return big_values[n];
 }
 
 template <typename T> constexpr T scale10(T n) {
-  if constexpr (std::is_same_v<T, __int128> ||
-                std::is_same_v<T, unsigned __int128>) {
+  if constexpr (std::is_same_v<T, int128_t> ||
+                std::is_same_v<T, uint128_t>) {
     return bigScale10(n);
   } else {
     return smallScale10(n);
@@ -218,7 +225,7 @@ scaledIntToString(auto value, int valueScale, auto &fixedLenBuffer,
     decimalPlaces = valueScale;
   }
   int scale;
-  if constexpr (std::is_same_v<T, __int128> || std::is_same_v<T, unsigned __int128>) {
+  if constexpr (std::is_same_v<T, int128_t> || std::is_same_v<T, uint128_t>) {
     scale = 35;
   } else {
     scale = 18;

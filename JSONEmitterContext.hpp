@@ -138,7 +138,7 @@ private:
 
 template <typename T, typename... FormatArgs>
 void encodeToJSONStream(const T &mopedObject, std::ostream &output,
-                        FormatArgs... args) {
+                        FormatArgs...) {
   JSONEmitterContext<FormatArgs...> context(output);
   auto handler =
       getMOPEDHandlerForParser<T, StringDecodingTraits<FormatArgs...>>();

@@ -1,4 +1,11 @@
 #pragma once
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+using int128_t = __int128;
+using uint128_t = unsigned __int128;
+#pragma GCC diagnostic pop
+
 #include "concepts.hpp"
 #include "scaledIntParseUtils.hpp"
 #include <format>
@@ -30,8 +37,8 @@ namespace moped {
 
 template <typename T>
 concept is_allowed_itegral =
-    std::is_integral_v<T> || std::is_same_v<T, __int128> ||
-    std::is_same_v<T, unsigned __int128>;
+    std::is_integral_v<T> || std::is_same_v<T, int128_t> ||
+    std::is_same_v<T, uint128_t>;
 
 template <is_allowed_itegral I, std::uint8_t Scale10V> class ScaledInteger {
 public:

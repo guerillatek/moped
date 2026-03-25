@@ -85,6 +85,38 @@ public:
     return *this;
   }
 
+  MappedEnumFlags &operator=(MappedEnumFlags rhs) {
+    _value = rhs._value;
+    return *this;
+  }
+
+  MappedEnumFlags operator^(MappedEnumFlags rhs) {
+    return MappedEnumFlags{_value ^ rhs._value};
+  }
+
+  MappedEnumFlags operator|(MappedEnumFlags rhs) {
+    return MappedEnumFlags{_value | rhs._value};
+  }
+
+  MappedEnumFlags operator&(MappedEnumFlags rhs) {
+    return MappedEnumFlags{_value & rhs._value};
+  }
+
+  MappedEnumFlags &operator^=(MappedEnumFlags rhs) {
+    _value ^= rhs._value;
+    return *this;
+  }
+
+  MappedEnumFlags &operator|=(MappedEnumFlags rhs) {
+    _value |= rhs._value;
+    return *this;
+  }
+
+  MappedEnumFlags &operator&=(MappedEnumFlags rhs) {
+    _value &= rhs._value;
+    return *this;
+  }
+
   // Collection-like interface
   bool emplace_back(MappedEnumT value) {
     if (has_value(value.getEnumValue())) {

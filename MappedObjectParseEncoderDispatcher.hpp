@@ -376,8 +376,7 @@ struct Handler<MemberT, DecodingTraits>
     _dispatcher = &const_cast<MemberT &>(targetMember);
   }
 
-  void applyEmitterContext(auto &emitterContext,
-                           std::optional<MemberIdType> memberId) {
+  void applyEmitterContext(auto &, std::optional<MemberIdType>) {
     static_assert(false, "Emission not supported for types that use function "
                          "dispatchers in lieu of collection types");
   }
