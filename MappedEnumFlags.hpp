@@ -46,28 +46,43 @@ public:
 public:
   using value_type = std::string_view;
 
+  MappedEnumFlags(const MappedEnumFlags &) = default;
+  MappedEnumFlags(MappedEnumFlags &&) noexcept = default;
+  MappedEnumFlags &operator=(const MappedEnumFlags &) = default;
+  MappedEnumFlags &operator=(MappedEnumFlags &&) noexcept = default;
+  ~MappedEnumFlags() = default;
+
   MappedEnumFlags() : _value(0) {}
 
   explicit MappedEnumFlags(MappedEnumT value)
-      : _value(std::to_underlying(value)) {}
+      : _value(std::to_underlying(value.getEnumValue())) {}
 
-  explicit MappedEnumFlags(FlagValueT value) : _value() {}
+  explicit MappedEnumFlags(FlagValueT value) : _value{value} {}
 
   MappedEnumFlags &operator=(EnumType value) {
     _value = static_cast<FlagValueT>(value);
     return *this;
   }
 
-  MappedEnumFlags operator^(EnumType value) {
+  bool operator==(EnumType value) const {
+    return _value == static_cast<FlagValueT>(value);
+  }
+
+  bool operator==(const MappedEnumFlags &rhs) const {
+    return _value == rhs._value;
+  }
+
+  MappedEnumFlags operator^(EnumType value) const {
     return MappedEnumFlags{_value ^ std::to_underlying(value)};
   }
 
-  MappedEnumFlags operator|(EnumType value) {
-    return MappedEnumFlags{_value | std::to_underlying(value)};
+  MappedEnumFlags operator|(EnumType value) const {
+    return MappedEnumFlags{_value | std::to_underlying(value.getEnumValue())};
   }
 
-  MappedEnumFlags operator&(MappedEnumT value) {
-    return MappedEnumFlags{_value &= std::to_underlying(value)};
+  MappedEnumFlags operator&(MappedEnumT value) const {
+    return MappedEnumFlags{static_cast<FlagValueT>(
+        _value & std::to_underlying(value.getEnumValue()))};
   }
 
   MappedEnumFlags &operator^=(EnumType value) {
@@ -81,28 +96,23 @@ public:
   }
 
   MappedEnumFlags &operator&=(MappedEnumT value) {
-    _value &= std::to_underlying(value);
+    _value &= std::to_underlying(value.getEnumValue());
     return *this;
   }
 
-  MappedEnumFlags &operator=(MappedEnumFlags rhs) {
-    _value = rhs._value;
-    return *this;
-  }
-
-  MappedEnumFlags operator^(MappedEnumFlags rhs) {
+  MappedEnumFlags operator^(MappedEnumFlags rhs) const {
     return MappedEnumFlags{_value ^ rhs._value};
   }
 
-  MappedEnumFlags operator|(MappedEnumFlags rhs) {
+  MappedEnumFlags operator|(MappedEnumFlags rhs) const {
     return MappedEnumFlags{_value | rhs._value};
   }
 
-  MappedEnumFlags operator&(MappedEnumFlags rhs) {
+  MappedEnumFlags operator&(MappedEnumFlags rhs) const {
     return MappedEnumFlags{_value & rhs._value};
   }
 
-  MappedEnumFlags &operator^=(MappedEnumFlags rhs) {
+  MappedEnumFlags &operator^=(MappedEnumFlags rhs) const {
     _value ^= rhs._value;
     return *this;
   }
@@ -147,6 +157,7 @@ public:
   bool empty() const { return _value == 0; }
 
   operator FlagValueT() const { return _value; }
+  operator bool() const { return _value != 0; }
 };
 
 } // namespace moped

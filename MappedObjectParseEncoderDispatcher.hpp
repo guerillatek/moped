@@ -581,9 +581,9 @@ struct Handler<MemberT, DecodingTraits>
       }
       return this->_valueTypeHandler.onObjectStart(eventHandlerStack);
     } else {
-      return std::unexpected(
-          "Parse error!!! onObjectStart event not expected in collection "
-          "with scalar value types");
+      return std::unexpected("Parse error!!! onObjectStart event not expected "
+                             "in mapped collection "
+                             "with scalar value types");
     }
     return {};
   }
@@ -595,9 +595,25 @@ struct Handler<MemberT, DecodingTraits>
   }
 
   Expected onArrayStart(MOPEDHandlerStack &handlerStack) override {
-    handlerStack.push(this);
-    return {};
+    if constexpr (IsMOPEDContentCollectionC<MappedType>) {
+      auto entryResult = _targetCollection->emplace(_currentKey, MappedType{});
+
+      if constexpr (requires {
+                      this->_valueTypeHandler.setTargetMember(
+                          entryResult.first->second);
+                    }) {
+        this->_valueTypeHandler.setTargetMember(entryResult.first->second);
+      } else {
+        this->_valueTypeHandler.setTargetMember(entryResult->second);
+      }
+      return this->_valueTypeHandler.onArrayStart(handlerStack);
+    } else {
+      return std::unexpected(
+          "Parse error!!! onArrayStart event not expected in mapped collection "
+          "with non collection types");
+    }
   }
+
   Expected onArrayFinish(MOPEDHandlerStack &handlerStack) override {
     handlerStack.pop();
     _addingContent = false;
@@ -638,6 +654,7 @@ struct Handler<MemberT, DecodingTraits>
 private:
   Expected HandleScalarValue(std::string_view value) {
     if constexpr (HasCompositeMappedType) {
+
       return std::unexpected(
           "Parse error!!! No active composite handler to set value");
     } else {
