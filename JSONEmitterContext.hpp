@@ -122,11 +122,12 @@ private:
   }
 
   void writeJSONEncodedValue(const auto &value) {
-    if constexpr (std::is_arithmetic_v<std::decay_t<decltype(value)>>) {
-      _output << value;
-    } else if constexpr (std::is_same_v<std::decay_t<decltype(value)>, bool>) {
+    if constexpr (std::is_same_v<std::decay_t<decltype(value)>, bool>) {
       _output << (value ? "true" : "false");
-    } else {
+    }
+    else if constexpr (std::is_arithmetic_v<std::decay_t<decltype(value)>>) {
+      _output << value;
+    }  else {
       _output << "\"" << value << "\"";
     }
   }

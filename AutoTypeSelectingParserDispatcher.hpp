@@ -74,8 +74,20 @@ public:
     return _parserHandler.onNumericValue(value);
   }
 
-  Expected onObjectStart() { return _parserHandler.onObjectStart(); }
-  Expected onObjectFinish() { return _parserHandler.onObjectFinish(); }
+  Expected onObjectStart() {
+    if (!_pivotSelector.compositeSet()) {
+      _pivotSelector.onObjectStart();
+    }
+    return _parserHandler.onObjectStart();
+  }
+
+  Expected onObjectFinish() {
+    auto result = _parserHandler.onObjectFinish();
+    if (!_pivotSelector.compositeSet()) {
+      _pivotSelector.onObjectFinish();
+    }
+    return result;
+  }
   Expected onArrayStart() { return _parserHandler.onArrayStart(); }
   Expected onArrayFinish() { return _parserHandler.onArrayFinish(); }
   Expected onBooleanValue(bool value) {

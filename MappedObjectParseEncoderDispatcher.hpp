@@ -120,6 +120,13 @@ struct Handler<MemberT, DecodingTraits>
 
   void applyEmitterContext(auto &emitterContext,
                            std::optional<MemberIdType> memberId) {
+
+    if constexpr (requires { _targetCollection->empty(); }) {
+      if (_targetCollection->empty()) {
+        return; // Skip emitting empty collections
+      }
+    }
+
     emitterContext.onArrayStart(memberId);
 
     // IsMOPEDPushCollectionC constraint encompasses a standard/proprietary

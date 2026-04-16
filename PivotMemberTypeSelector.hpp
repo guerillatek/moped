@@ -38,15 +38,27 @@ public:
   PivotMemberTypeSelector(ParseHandlerT &parserHandler)
       : _parserHandler(parserHandler) {}
 
-  Expected onMember(std::string_view memberName) {
-    if (memberName == PivotMapT::pivot_member) {
-      _pivotOnNextValue = true;
+  Expected onObjectStart() {
+    ++_objectDepth;
+    return {};
+  }
+
+  Expected onObjectFinish() {
+    _pivotOnNextValue = false;
+    if (_objectDepth > 0) {
+      --_objectDepth;
     }
     return {};
   }
 
+  Expected onMember(std::string_view memberName) {
+    _pivotOnNextValue =
+        (_objectDepth == 1) && (memberName == PivotMapT::pivot_member);
+    return {};
+  }
+
   Expected onStringValue(std::string_view value) {
-    if (_pivotOnNextValue) {
+    if (std::exchange(_pivotOnNextValue, false)) {
       auto result = applyPivotValue(value);
       if (!result) {
         return result;
@@ -56,7 +68,7 @@ public:
   }
 
   Expected onNumericValue(std::string_view value) {
-    if (_pivotOnNextValue) {
+    if (std::exchange(_pivotOnNextValue, false)) {
       auto result = applyPivotValue(value);
       if (!result) {
         return result;
@@ -68,6 +80,7 @@ public:
   template <typename... ConstructorArgs> void reset(ConstructorArgs &&...args) {
     _pivotOnNextValue = false;
     _compositeSet = false;
+    _objectDepth = 0;
   }
 
   auto compositeSet() const { return _compositeSet; }
@@ -75,6 +88,7 @@ public:
   void reset() {
     _pivotOnNextValue = false;
     _compositeSet = false;
+    _objectDepth = 0;
   }
 
 private:
@@ -90,7 +104,7 @@ private:
       if (!selectResult) {
         return selectResult;
       }
-      return selectTypeForAssignedValue(result.value());
+      return selectResult;
     }
   }
 
@@ -112,6 +126,7 @@ private:
   }
 
   ParseHandlerT &_parserHandler;
+  std::size_t _objectDepth{0};
   bool _pivotOnNextValue{false};
   bool _compositeSet{false};
 };
