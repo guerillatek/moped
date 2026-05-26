@@ -35,8 +35,13 @@ public:
   using DecodingTraits = typename ParseHandlerT::DecodingTraits;
   using PivotValueT = typename DecodingTraits::PivotValueT;
 
-  PivotMemberTypeSelector(ParseHandlerT &parserHandler)
-      : _parserHandler(parserHandler) {}
+  PivotMemberTypeSelector() : _parserHandler(nullptr) {}
+  explicit PivotMemberTypeSelector(ParseHandlerT &parserHandler)
+      : _parserHandler(&parserHandler) {}
+
+  void setParserHandler(ParseHandlerT &parserHandler) {
+    _parserHandler = &parserHandler;
+  }
 
   Expected onObjectStart() {
     ++_objectDepth;
@@ -113,7 +118,7 @@ private:
       using CurrentEntry = std::tuple_element_t<I, ValueToTypeMapT>;
       if (PivotValueT{CurrentEntry::type_select_value} == value) {
         using MappedType = typename CurrentEntry::MappedType;
-        _parserHandler.template setActiveComposite<MappedType>();
+        _parserHandler->template setActiveComposite<MappedType>();
         _compositeSet = true;
         return {};
       } else {
@@ -125,7 +130,7 @@ private:
         std::format("{} with value {}", PivotMapT::pivot_member, value)}};
   }
 
-  ParseHandlerT &_parserHandler;
+  ParseHandlerT *_parserHandler;
   std::size_t _objectDepth{0};
   bool _pivotOnNextValue{false};
   bool _compositeSet{false};

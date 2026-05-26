@@ -297,7 +297,7 @@ struct Handler<MemberT, DecodingTraits>
   using MOPEDHandlerStack = std::stack<IMOPEDHandler<DecodingTraits> *>;
 
   Expected onMember(MOPEDHandlerStack &, MemberIdType) override {
-    return std::unexpected("Parse error!!! onObjectFinish event not expected"
+    return std::unexpected("Parse error!!! onMember event not expected"
                            " in dispatching handler");
   }
 

@@ -4,21 +4,32 @@
 #include "JSONViewParser.hpp"
 #include "PivotMemberTypeSelector.hpp"
 
+#include <tuple>
+
 namespace moped {
 
-template <typename CandidateHarnessT, typename PivotMapT = EmptyPivotMapT>
+template <typename CandidateHarnessT, typename... PivotMapTypesT>
 class AutoTypeSelectingParserDispatcher {
 
   using ParserHandlerT = AutoTypeSelectingParserHandler<CandidateHarnessT>;
   ParserHandlerT _parserHandler;
 
-  using PivotSelectorT = PivotMemberTypeSelector<ParserHandlerT, PivotMapT>;
-  PivotSelectorT _pivotSelector{_parserHandler};
+  using PivotSelectorsT = std::tuple<PivotMapTypesT...>;
+  using PivotSelectorStatesT =
+      std::tuple<PivotMemberTypeSelector<ParserHandlerT, PivotMapTypesT>...>;
+  static constexpr bool kHasPivotSelectors =
+      (std::tuple_size_v<PivotSelectorsT> > 0);
+
+  PivotSelectorStatesT _pivotSelectors{
+      PivotMemberTypeSelector<ParserHandlerT, PivotMapTypesT>{
+          _parserHandler}...};
 
 public:
   template <typename... Args>
   AutoTypeSelectingParserDispatcher(Args &&...args)
-      : _parserHandler{std::forward<Args>(args)...} {}
+      : _parserHandler{std::forward<Args>(args)...},
+        _pivotSelectors{PivotMemberTypeSelector<ParserHandlerT, PivotMapTypesT>{
+            _parserHandler}...} {}
 
   Expected parseAndDispatchJSONSteam(std::istream &jsonStream,
                                      auto &&handlerFunction) {
@@ -50,42 +61,35 @@ public:
 
   template <typename... Args> void reset(Args &&...args) {
     _parserHandler.reset(std::forward<Args>(args)...);
-    _pivotSelector.reset();
+    applyToPivotSelectors([](auto &selector) { selector.reset(); });
   }
 
   Expected onMember(std::string_view memberName) {
-    if (!_pivotSelector.compositeSet()) {
-      _pivotSelector.onMember(memberName);
-    }
+    applyToPivotSelectors(
+        [&](auto &selector) { selector.onMember(memberName); });
     return _parserHandler.onMember(memberName);
   }
 
   Expected onStringValue(std::string_view value) {
-    if (!_pivotSelector.compositeSet()) {
-      _pivotSelector.onStringValue(value);
-    }
+    applyToPivotSelectors(
+        [&](auto &selector) { selector.onStringValue(value); });
     return _parserHandler.onStringValue(value);
   }
 
   Expected onNumericValue(std::string_view value) {
-    if (!_pivotSelector.compositeSet()) {
-      _pivotSelector.onNumericValue(value);
-    }
+    applyToPivotSelectors(
+        [&](auto &selector) { selector.onNumericValue(value); });
     return _parserHandler.onNumericValue(value);
   }
 
   Expected onObjectStart() {
-    if (!_pivotSelector.compositeSet()) {
-      _pivotSelector.onObjectStart();
-    }
+    applyToPivotSelectors([](auto &selector) { selector.onObjectStart(); });
     return _parserHandler.onObjectStart();
   }
 
   Expected onObjectFinish() {
     auto result = _parserHandler.onObjectFinish();
-    if (!_pivotSelector.compositeSet()) {
-      _pivotSelector.onObjectFinish();
-    }
+    applyToPivotSelectors([](auto &selector) { selector.onObjectFinish(); });
     return result;
   }
   Expected onArrayStart() { return _parserHandler.onArrayStart(); }
@@ -94,6 +98,17 @@ public:
     return _parserHandler.onBooleanValue(value);
   }
   Expected onNullValue() { return _parserHandler.onNullValue(); }
+
+private:
+  template <typename CallableT>
+  void applyToPivotSelectors(CallableT &&callable) {
+    if constexpr (!kHasPivotSelectors) {
+      return;
+    } else {
+      std::apply([&](auto &...selectors) { (callable(selectors), ...); },
+                 _pivotSelectors);
+    }
+  }
 };
 
 } // namespace moped

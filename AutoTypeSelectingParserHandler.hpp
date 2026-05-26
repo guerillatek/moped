@@ -37,8 +37,9 @@ template <DecodingTraitsC DecodingTraits, typename T> struct LastHarness {
     if (!result) {
       if (activeParticipants == 0) {
         errors.push_back(result.error());
-        _participating = false;
       }
+      _participating = false;
+
     } else {
       activeParticipants++;
     }
@@ -126,8 +127,8 @@ struct CandidateTypeHarness<DecodingTraits, T, TailTypes...> {
     if (!result) {
       if (activeParticipants == 0) {
         errors.push_back(result.error());
-        _participating = false;
       }
+      _participating = false;
     } else {
       activeParticipants++;
     }
