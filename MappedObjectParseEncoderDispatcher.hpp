@@ -515,7 +515,7 @@ struct Handler<MemberT, DecodingTraits>
 
   void applyEmitterContext(auto &emitterContext,
                            std::optional<MemberIdT> memberId) {
-    emitterContext.onArrayStart(memberId, sizeof(*_targetArray));
+    emitterContext.onArrayStart(memberId);
 
     for (auto &item : *_targetArray) {
       if constexpr (HasCompositeValueType) {
