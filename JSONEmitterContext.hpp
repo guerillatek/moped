@@ -121,14 +121,53 @@ private:
     _output << value.toString();
   }
 
-  void writeJSONEncodedValue(const auto &value) {
-    if constexpr (std::is_same_v<std::decay_t<decltype(value)>, bool>) {
-      _output << (value ? "true" : "false");
+  std::string escapeJSONString(std::string_view input) {
+    std::string escaped;
+    for (char c : input) {
+      switch (c) {
+      case '\"':
+        escaped += "\\\"";
+        break;
+      case '\\':
+        escaped += "\\\\";
+        break;
+      case '\b':
+        escaped += "\\b";
+        break;
+      case '\f':
+        escaped += "\\f";
+        break;
+      case '\n':
+        escaped += "\\n";
+        break;
+      case '\r':
+        escaped += "\\r";
+        break;
+      case '\t':
+        escaped += "\\t";
+        break;
+      default:
+        if (static_cast<unsigned char>(c) < 0x20) {
+          escaped += "\\u" + std::to_string(static_cast<int>(c));
+        } else {
+          escaped += c;
+        }
+      }
     }
-    else if constexpr (std::is_arithmetic_v<std::decay_t<decltype(value)>>) {
+    return escaped;
+  }
+
+  template <typename T> void writeJSONEncodedValue(const T &value) {
+    if constexpr (std::is_same_v<T, bool>) {
+      _output << (value ? "true" : "false");
+    } else if constexpr (std::is_arithmetic_v<T>) {
       _output << value;
-    }  else {
-      _output << "\"" << value << "\"";
+    } else {
+      if constexpr (std::convertible_to<T, std::string_view>) {
+        _output << "\"" << escapeJSONString(value) << "\"";
+      } else {
+        _output << "\"" << value << "\"";
+      }
     }
   }
 
