@@ -28,7 +28,7 @@ find_path(Yaml_INCLUDE_DIR yaml.h HINTS /yaml/include REQUIRED NO_SYSTEM_ENVIRON
 message(STATUS "Yaml_INCLUDE_DIR=${Yaml_INCLUDE_DIR}")
 
 
-add_library(moped SHARED 
+add_library(moped 
 ParserBase.cpp)
 
 

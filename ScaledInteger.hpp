@@ -95,6 +95,10 @@ public:
     return _rawIntegerValue == rhs._rawIntegerValue;
   }
 
+  bool operator!=(const ScaledInteger &rhs) const {
+    return _rawIntegerValue != rhs._rawIntegerValue;
+  }
+
   ScaledInteger operator+(const ScaledInteger &rhs) const {
     return ScaledInteger{_rawIntegerValue + rhs._rawIntegerValue};
   }
@@ -128,7 +132,7 @@ public:
 private:
   ScaledInteger(I rawIntegerValue) : _rawIntegerValue{rawIntegerValue} {}
 
-  IntegralT _rawIntegerValue;
+  IntegralT _rawIntegerValue{0};
 };
 
 } // namespace moped
