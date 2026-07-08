@@ -93,7 +93,7 @@ public:
     return os << std::string{entry.value()};
   }
 
-  auto getEnumValue() const { return _value; }
+  constexpr auto getEnumValue() const { return _value; }
 
   static auto from_chars(std::string_view str) {
     return findValueForString<0>(str);
