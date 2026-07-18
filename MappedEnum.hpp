@@ -65,6 +65,14 @@ public:
     return std::string(entry.value());
   }
 
+  operator std::string_view() const {
+    auto entry = findStringForValue<0>(_value);
+    if (!entry) {
+      throw std::invalid_argument("Invalid enum value");
+    }
+    return *entry;
+  }
+
   friend bool operator==(const MappedEnum &lhs, const MappedEnum &rhs) {
     return lhs._value == rhs._value;
   }

@@ -24,10 +24,19 @@ public:
   JSONEmitterContext(std::ostream &output) : _output(output) {}
   // Implementation for starting a JSON object
   void onObjectStart(std::optional<std::string_view> memberId = std::nullopt) {
-    if (!_positionNested.empty() && (_positionNested.top() > 0)) {
+    if ((_positionNested.size() == 1) && (_positionNested.top() == 0)) {
+      if ((memberId.has_value()) && (*memberId == "")) {
+        _publishingRootMap = true;
+        _output << "{";
+        _positionNested.push(0);
+        return;
+      } else {
+        _output << "{";
+      }
+    } else if (!_positionNested.empty() && (_positionNested.top() > 0)) {
       _output << ",";
     }
-    if (memberId) {
+    if (memberId && !memberId->empty()) {
       _output << "\"" << *memberId << "\": ";
     }
     if (_positionNested.size() > 0) {
@@ -38,7 +47,7 @@ public:
 
   void onObjectFinish() {
     _positionNested.pop();
-    if (_positionNested.empty() && _publishingRootArray) {
+    if (_positionNested.empty() && (_publishingRootArray || _publishingRootMap)) {
       _publishingRootArray = false;
       return;
     }
@@ -172,6 +181,7 @@ private:
   }
 
   bool _publishingRootArray{false};
+  bool _publishingRootMap{false};
   std::ostream &_output;
   std::stack<std::uint32_t> _positionNested;
 };
