@@ -289,7 +289,7 @@ concept is_optional = requires(T t) {
 template <typename P>
 concept is_iterator = requires() {
   typename std::iterator_traits<P>::value_type;
-} && can_dereference<P> && !is_optional<P>;
+} && can_dereference<P> && !is_optional<P> && !std::is_pointer_v<P>;
 
 template <typename P>
 concept is_smart_pointer = requires() {
