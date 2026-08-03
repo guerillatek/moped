@@ -73,6 +73,8 @@ public:
     return *entry;
   }
 
+  operator EnumT() const { return _value; }
+
   friend bool operator==(const MappedEnum &lhs, const MappedEnum &rhs) {
     return lhs._value == rhs._value;
   }
