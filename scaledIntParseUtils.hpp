@@ -1,6 +1,5 @@
 #pragma once
 
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 using int128_t = __int128;
@@ -46,8 +45,8 @@ constexpr int64_t smallScale10(std::uint32_t n) {
   return values[n];
 }
 
-constexpr std::array<uint128_t, 36uz> makeBigScale10Values() {
-  std::array<uint128_t, 36uz> values{};
+constexpr std::array<uint128_t, 37uz> makeBigScale10Values() {
+  std::array<uint128_t, 37uz> values{};
   values[0] = 1;
   for (std::size_t i = 1; i < values.size(); ++i) {
     values[i] = (values[i - 1] << 3) + (values[i - 1] << 1);
@@ -56,16 +55,15 @@ constexpr std::array<uint128_t, 36uz> makeBigScale10Values() {
 }
 
 constexpr uint128_t bigScale10(std::uint32_t n) {
-  constexpr uint128_t BIG_NUM_SCALE_FACTORS = 36uz;
-  static constexpr std::array<uint128_t, BIG_NUM_SCALE_FACTORS>
-      big_values = makeBigScale10Values();
+  constexpr uint128_t BIG_NUM_SCALE_FACTORS = 37uz;
+  static constexpr std::array<uint128_t, BIG_NUM_SCALE_FACTORS> big_values =
+      makeBigScale10Values();
 
   return big_values[n];
 }
 
 template <typename T> constexpr T scale10(T n) {
-  if constexpr (std::is_same_v<T, int128_t> ||
-                std::is_same_v<T, uint128_t>) {
+  if constexpr (std::is_same_v<T, int128_t> || std::is_same_v<T, uint128_t>) {
     return bigScale10(n);
   } else {
     return smallScale10(n);
@@ -216,17 +214,12 @@ scaledIntToString(auto value, int valueScale, auto &fixedLenBuffer,
                   int decimalPlaces = std::numeric_limits<int>::min()) {
 
   using T = std::decay_t<decltype(value)>;
-  if (value == std::numeric_limits<int>::min()) {
-    static auto fastZero = std::string_view{"0.0"};
-    std::copy(fastZero.begin(), fastZero.end() + 1, std::begin(fixedLenBuffer));
-    return fixedLenBuffer;
-  }
   if (decimalPlaces == std::numeric_limits<int>::min()) {
     decimalPlaces = valueScale;
   }
   int scale;
   if constexpr (std::is_same_v<T, int128_t> || std::is_same_v<T, uint128_t>) {
-    scale = 35;
+    scale = 36;
   } else {
     scale = 18;
   }

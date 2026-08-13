@@ -54,6 +54,9 @@ public:
     return *this;
   }
 
+  bool operator==(EnumT value) const { return _value == value; }
+  bool operator!=(EnumT value) const { return _value != value; }
+
   using EnumType = EnumT;
   using EntryTupleType = decltype(entries);
 

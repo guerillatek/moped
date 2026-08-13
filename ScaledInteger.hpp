@@ -17,7 +17,7 @@ template <moped::is_scaled_int T> struct std::formatter<T> {
   constexpr auto parse(auto &ctx) { return ctx.begin(); }
 
   auto format(const T &scaledInt, auto &ctx) const {
-    char buffer[32];
+    char buffer[256];
     moped::scaledIntToString(scaledInt.getRawIntegerValue(), T::Scale, buffer);
     bool is_valid_start = (buffer[0] == '-') || (buffer[0] == '.') ||
                           ((buffer[0] >= '0') && (buffer[0] <= '9'));
