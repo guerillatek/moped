@@ -1,6 +1,5 @@
 #include "moped/JSONStreamParser.hpp"
 #include "moped/MappedObjectParseEncoderDispatcher.hpp"
-#include "moped/ParsingPivotMember.hpp"
 #include "moped/ScaledInteger.hpp"
 
 namespace moped {

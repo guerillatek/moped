@@ -4,7 +4,7 @@
 #include <format>
 #include <moped/concepts.hpp>
 
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 inline constexpr char flag1[] = "flag1";
 inline constexpr char flag2[] = "flag2";

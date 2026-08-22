@@ -1,5 +1,5 @@
 
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 #include "moped/JSONEmitterContext.hpp"
 #include "moped/TimeFormatters.hpp"

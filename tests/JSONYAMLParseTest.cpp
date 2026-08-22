@@ -3,7 +3,7 @@
 #include "moped/mopedJSON.hpp"
 #include "moped/mopedYAML.hpp"
 
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 #include "moped/tests/mdConfigSampleDefns.hpp"
 #include <optional>

@@ -1,5 +1,5 @@
 #include "moped/ScaledInteger.hpp"
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 #include <format>
 
 #define ASSERT_EQ(A, B) REQUIRE(A == B)
