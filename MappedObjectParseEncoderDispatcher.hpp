@@ -135,7 +135,7 @@ struct Handler<MemberT, DecodingTraits>
 
     if constexpr (is_mapped_enum_flag<MemberT>) {
       _targetCollection->forEachSetFlag([&](auto entry) {
-        emitterContext.onArrayValueEntry(entry.stringValue);
+        emitterContext.onArrayValueEntry(entry);
       });
     } else {
       for (auto &item : *_targetCollection) {

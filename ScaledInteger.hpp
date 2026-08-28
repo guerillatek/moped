@@ -53,9 +53,11 @@ public:
 
   template <is_scaled_int S> explicit ScaledInteger(const S &src) {
     if (S::Scale > Scale) {
-      _rawIntegerValue = src._rawIntegerValue / scale10<I>(S::Scale - Scale);
+      _rawIntegerValue =
+          src.getRawIntegerValue() / scale10<I>(S::Scale - Scale);
     } else {
-      _rawIntegerValue = src._rawIntegerValue * scale10<I>(Scale - S::Scale);
+      _rawIntegerValue =
+          src.getRawIntegerValue() * scale10<I>(Scale - S::Scale);
     }
   }
 

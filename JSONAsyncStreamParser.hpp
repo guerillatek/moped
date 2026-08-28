@@ -245,6 +245,24 @@ public:
         parseState = ParseState::MemberName;
       }; break;
       case MemberName: {
+
+        if (auto result = co_await coWaitForValidStream(
+                [&, this]() {
+                  co_return std::string("Unexpected end of frame while "
+                                        "expecting text '\"' or '}' "
+                                        "after start if object parse");
+                },
+                [&, this]() {
+                  if (_activeStream.peek() == '}') {
+                    parseState = ParseState::CloseValue;
+                  }
+                });
+            !result) {
+          co_return std::unexpected(result.error());
+        }
+        if (parseState != ParseState::MemberName) {
+          continue; // Skip the rest of the MemberName case if state changed
+        }
         auto expectedText = getMemberText();
         if (!expectedText) {
           co_return std::unexpected(std::format("{}", expectedText.error()));

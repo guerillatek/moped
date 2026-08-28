@@ -50,8 +50,7 @@ class JSONStreamParser : public ParserBase {
   ExpectedText getStringValueText(std::istream &ss) {
     char c = ss.get();
     _reusableBuffer.clear();
-    if (c == '\"')
-    {
+    if (c == '\"') {
       return std::string{}; // empty string value
     }
     _reusableBuffer += c;
@@ -151,6 +150,10 @@ public:
         break;
       }
       case MemberName: {
+        if (ss.peek() == '}') {
+          parseState = ParseState::CloseValue;
+          continue;
+        }
         auto expectedText = getMemberText(ss);
         if (!expectedText) {
           return std::unexpected(expectedText.error().memorySafe());

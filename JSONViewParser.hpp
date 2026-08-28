@@ -3,6 +3,7 @@
 #include "concepts.hpp"
 #include "moped/ParserBase.hpp"
 #include <expected>
+#include <format>
 #include <regex>
 #include <stack>
 #include <string>
@@ -26,8 +27,10 @@ class JSONViewParser : public ParserBase {
   // Parse a quoted member name, return the view and advance iterator
   ExpectedText getMemberText(Iterator &it, Iterator end) {
     skipWhitespace(it, end);
-    if (it == end || *it != '"')
-      return std::unexpected("Expected open quote for member name");
+    if (it == end || *it != '"') {
+      return std::unexpected(ParseError{"Expected open quote for member definition but got ",
+                                        std::format("'{}'", *it)});
+    }
     ++it; // skip opening quote
     Iterator start = it;
     while (it != end && *it != '"')
@@ -136,6 +139,10 @@ public:
         break;
       }
       case ParseState::MemberName: {
+        if (it != end && *it == '}') {
+          parseState = ParseState::CloseValue;
+          continue; 
+        }
         auto expectedText = getMemberText(it, end);
         if (!expectedText)
           return std::unexpected(expectedText.error());

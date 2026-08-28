@@ -35,10 +35,10 @@ public:
 
   FlagValueT _value{0};
 
-  void forEachSetFlag(auto &&func) {
+  auto forEachSetFlag(auto &&func) const {
     return MappedEnumType::forEachMappedValue([&](auto &entry) {
       if (has_value(entry.value)) {
-        func(entry);
+        func(MappedEnumType{entry.value});
       }
     });
   }
@@ -73,11 +73,13 @@ public:
   }
 
   MappedEnumFlags operator^(EnumType value) const {
-    return MappedEnumFlags{_value ^ std::to_underlying(value)};
+    return MappedEnumFlags{
+        static_cast<FlagValueT>(_value ^ std::to_underlying(value))};
   }
 
   MappedEnumFlags operator|(EnumType value) const {
-    return MappedEnumFlags{_value | std::to_underlying(value.getEnumValue())};
+    return MappedEnumFlags{static_cast<FlagValueT>(
+        _value | std::to_underlying(value.getEnumValue()))};
   }
 
   MappedEnumFlags operator&(MappedEnumT value) const {
@@ -101,15 +103,15 @@ public:
   }
 
   MappedEnumFlags operator^(MappedEnumFlags rhs) const {
-    return MappedEnumFlags{_value ^ rhs._value};
+    return MappedEnumFlags{static_cast<FlagValueT>(_value ^ rhs._value)};
   }
 
   MappedEnumFlags operator|(MappedEnumFlags rhs) const {
-    return MappedEnumFlags{_value | rhs._value};
+    return MappedEnumFlags{static_cast<FlagValueT>(_value | rhs._value)};
   }
 
   MappedEnumFlags operator&(MappedEnumFlags rhs) const {
-    return MappedEnumFlags{_value & rhs._value};
+    return MappedEnumFlags{static_cast<FlagValueT>(_value & rhs._value)};
   }
 
   MappedEnumFlags &operator^=(MappedEnumFlags rhs) const {
@@ -125,6 +127,10 @@ public:
   MappedEnumFlags &operator&=(MappedEnumFlags rhs) {
     _value &= rhs._value;
     return *this;
+  }
+
+  MappedEnumFlags operator~() const {
+    return MappedEnumFlags{static_cast<FlagValueT>(~_value)};
   }
 
   // Collection-like interface
