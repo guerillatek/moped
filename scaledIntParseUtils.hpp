@@ -13,15 +13,16 @@ using uint128_t = unsigned __int128;
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <type_traits>
 
 namespace moped {
 
 template <typename F>
 concept FloatType = std::is_floating_point_v<F>;
 
-constexpr int64_t smallScale10(std::uint32_t n) {
-  constexpr size_t NUM_SCALE_FACTORS = 19uz;
-  static constexpr std::array<std::int64_t, NUM_SCALE_FACTORS> values = {
+constexpr uint64_t smallScale10(std::uint32_t n) {
+  constexpr size_t NUM_SCALE_FACTORS = 20uz;
+  static constexpr std::array<std::uint64_t, NUM_SCALE_FACTORS> values = {
       1,
       10,
       100,
@@ -40,7 +41,8 @@ constexpr int64_t smallScale10(std::uint32_t n) {
       1000000000000000,
       10000000000000000,
       100000000000000000,
-      1000000000000000000};
+      1000000000000000000,
+      10000000000000000000UL};
 
   return values[n];
 }
@@ -221,7 +223,12 @@ scaledIntToString(auto value, int valueScale, auto &fixedLenBuffer,
   if constexpr (std::is_same_v<T, int128_t> || std::is_same_v<T, uint128_t>) {
     scale = 36;
   } else {
-    scale = 18;
+    if constexpr (std::is_signed_v<T>){
+      scale = 18;
+    }
+    else{
+      scale = 19;
+    }
   }
   bool decimalSet = false;
   auto writePos = std::begin(fixedLenBuffer);

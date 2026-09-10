@@ -125,6 +125,11 @@ public:
     return *this;
   }
 
+  ScaledInteger operator-=(const ScaledInteger &rhs) {
+    _rawIntegerValue -= rhs._rawIntegerValue;
+    return *this;
+  }
+
   friend std::ostream &operator<<(std::ostream &os,
                                   const ScaledInteger &scaledInt) {
     char buffer[128];
